@@ -61,11 +61,11 @@ def main():
     event_time = st.time_input("Enter the time you first studied the topic:")
     study_duration = st.number_input("Enter the duration of your study session (in minutes):", min_value=1)
     event_subject = st.selectbox("Select the subject of the event:", ["Physics", "Chemistry", "Combined Maths", "Other"])
-    event_topic = st.text_input("Enter the topic of the event:")
+    #event_topic = st.text_input("Enter the topic of the event:")
     event_description = st.text_area("Enter the description of the event:")
 
     if st.button('Schedule Event'):
-        if not event_topic or not event_description:
+        if not event_subject or not event_description:
             st.error("Please fill in all the fields to schedule an event.")
         else:
             with st.spinner('Creating events...'):
@@ -86,7 +86,7 @@ def main():
                     event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
                     
                     event = {
-                        'summary': f"{event_topic} - Review",
+                        'summary': f"{event_subject} - Review",
                         'description': event_description,
                         'start': {
                             'dateTime': event_datetime_interval.isoformat(),
