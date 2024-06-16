@@ -16,7 +16,7 @@ SCOPES = ['https://www.googleapis.com/auth/calendar.events']
 # Function to get color ID based on the subject
 def get_color_id(subject):
     subject = subject.lower()
-    if subject in ['physics', 'p6']:
+    if subject in ['physics', 'p6','Physics']:
         return '2'  # Peacock
     elif subject in ['chemistry', 'chem']:
         return '6'  # Tangerine
@@ -100,7 +100,7 @@ def main():
                     }
 
                     event = service.events().insert(calendarId='primary', body=event).execute()
-                    time.sleep(1)  # Simulating some delay for each event creation
+                    time.sleep(0.2)  # Simulating some delay for each event creation
                 st.success('Events Created Successfully ✔')
 
 if __name__ == '__main__':
