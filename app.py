@@ -9,7 +9,6 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import streamlit as st
 import time
-import json
 
 # If modifying these SCOPES, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/calendar.events']
@@ -31,8 +30,10 @@ def convert_to_sri_lanka_time(dt):
     sri_lanka_tz = pytz.timezone('Asia/Colombo')
     return dt.astimezone(sri_lanka_tz)
 
-# Function to get Google Calendar API credentials
-def get_credentials():
+def main():
+    """Shows basic usage of the Google Calendar API.
+    Creates a Google Calendar API service object and adds spaced repetition events.
+    """
     creds = None
     # The file token.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
@@ -44,55 +45,27 @@ def get_credentials():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            if 'credentials.json' not in st.session_state:
-                st.error("Please upload the credentials.json file.")
-                return None
-            with open('credentials.json', 'w') as f:
-                json.dump(st.session_state['credentials.json'], f)
             flow = InstalledAppFlow.from_client_secrets_file(
                 'credentials.json', SCOPES)
-            auth_url, _ = flow.authorization_url(prompt='consent')
-
-            st.write("Please go to this URL and authorize the application:")
-            st.write(auth_url)
-
-            auth_code = st.text_input("Enter the authorization code:")
-            if auth_code:
-                flow.fetch_token(code=auth_code)
-                creds = flow.credentials
-                # Save the credentials for the next run
-                with open('token.json', 'w') as token:
-                    token.write(creds.to_json())
-    return creds
-
-def main():
-    """Shows basic usage of the Google Calendar API.
-    Creates a Google Calendar API service object and adds spaced repetition events.
-    """
-    st.title('Google Calendar Event Scheduler')
-
-    # File uploader for credentials.json
-    uploaded_file = st.file_uploader("Upload your credentials.json file", type="json")
-    if uploaded_file:
-        st.session_state['credentials.json'] = json.load(uploaded_file)
-        st.success("credentials.json uploaded successfully!")
-
-    creds = get_credentials()
-    if not creds:
-        return
+            creds = flow.run_local_server(port=0)
+        # Save the credentials for the next run
+        with open('token.json', 'w') as token:
+            token.write(creds.to_json())
 
     service = build('calendar', 'v3', credentials=creds)
+
+    st.title('Google Calendar Event Scheduler')
 
     # Get event details from the user using Streamlit widgets
     event_date = st.date_input("Enter the date you first studied the topic:")
     event_time = st.time_input("Enter the time you first studied the topic:")
     study_duration = st.number_input("Enter the duration of your study session (in minutes):", min_value=1)
     event_subject = st.selectbox("Select the subject of the event:", ["Physics", "Chemistry", "Combined Maths", "Other"])
-    event_topic = st.text_input("Enter the topic of the event:")
+    #event_topic = st.text_input("Enter the topic of the event:")
     event_description = st.text_area("Enter the description of the event:")
 
     if st.button('Schedule Event'):
-        if not event_topic or not event_description:
+        if not event_subject or not event_description:
             st.error("Please fill in all the fields to schedule an event.")
         else:
             with st.spinner('Creating events...'):
@@ -113,7 +86,7 @@ def main():
                     event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
                     
                     event = {
-                        'summary': f"{event_topic} - Review",
+                        'summary': f"{event_subject} - Review",
                         'description': event_description,
                         'start': {
                             'dateTime': event_datetime_interval.isoformat(),
