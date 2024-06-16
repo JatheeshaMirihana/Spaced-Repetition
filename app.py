@@ -9,6 +9,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import streamlit as st
 import time
+import json
 
 # If modifying these SCOPES, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/calendar.events']
@@ -43,6 +44,11 @@ def get_credentials():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
+            if 'credentials.json' not in st.session_state:
+                st.error("Please upload the credentials.json file.")
+                return None
+            with open('credentials.json', 'w') as f:
+                json.dump(st.session_state['credentials.json'], f)
             flow = InstalledAppFlow.from_client_secrets_file(
                 'credentials.json', SCOPES)
             creds = flow.run_local_server(port=0)
@@ -55,11 +61,19 @@ def main():
     """Shows basic usage of the Google Calendar API.
     Creates a Google Calendar API service object and adds spaced repetition events.
     """
+    st.title('Google Calendar Event Scheduler')
+
+    # File uploader for credentials.json
+    uploaded_file = st.file_uploader("Upload your credentials.json file", type="json")
+    if uploaded_file:
+        st.session_state['credentials.json'] = json.load(uploaded_file)
+        st.success("credentials.json uploaded successfully!")
+
     creds = get_credentials()
+    if not creds:
+        return
 
     service = build('calendar', 'v3', credentials=creds)
-
-    st.title('Google Calendar Event Scheduler')
 
     # Get event details from the user using Streamlit widgets
     event_date = st.date_input("Enter the date you first studied the topic:")
