@@ -17,7 +17,7 @@ SCOPES = ['https://www.googleapis.com/auth/calendar.events']
 def get_color_id(subject):
     subject = subject.lower()
     if subject in ['physics', 'p6','Physics']:
-        return '2'  # Peacock
+        return '7'  # Peacock
     elif subject in ['chemistry', 'chem']:
         return '6'  # Tangerine
     elif subject in ['combined maths', 'c.m.']:
