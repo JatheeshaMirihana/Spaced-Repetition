@@ -30,10 +30,8 @@ def convert_to_sri_lanka_time(dt):
     sri_lanka_tz = pytz.timezone('Asia/Colombo')
     return dt.astimezone(sri_lanka_tz)
 
-def main():
-    """Shows basic usage of the Google Calendar API.
-    Creates a Google Calendar API service object and adds spaced repetition events.
-    """
+# Function to get Google Calendar API credentials
+def get_credentials():
     creds = None
     # The file token.json stores the user's access and refresh tokens, and is
     # created automatically when the authorization flow completes for the first
@@ -51,6 +49,13 @@ def main():
         # Save the credentials for the next run
         with open('token.json', 'w') as token:
             token.write(creds.to_json())
+    return creds
+
+def main():
+    """Shows basic usage of the Google Calendar API.
+    Creates a Google Calendar API service object and adds spaced repetition events.
+    """
+    creds = get_credentials()
 
     service = build('calendar', 'v3', credentials=creds)
 
@@ -61,11 +66,11 @@ def main():
     event_time = st.time_input("Enter the time you first studied the topic:")
     study_duration = st.number_input("Enter the duration of your study session (in minutes):", min_value=1)
     event_subject = st.selectbox("Select the subject of the event:", ["Physics", "Chemistry", "Combined Maths", "Other"])
-    #event_topic = st.text_input("Enter the topic of the event:")
+    event_topic = st.text_input("Enter the topic of the event:")
     event_description = st.text_area("Enter the description of the event:")
 
     if st.button('Schedule Event'):
-        if not event_subject or not event_description:
+        if not event_topic or not event_description:
             st.error("Please fill in all the fields to schedule an event.")
         else:
             with st.spinner('Creating events...'):
@@ -86,7 +91,7 @@ def main():
                     event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
                     
                     event = {
-                        'summary': f"{event_subject} - Review",
+                        'summary': f"{event_topic} - Review",
                         'description': event_description,
                         'start': {
                             'dateTime': event_datetime_interval.isoformat(),
