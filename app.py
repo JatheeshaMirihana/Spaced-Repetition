@@ -51,10 +51,18 @@ def get_credentials():
                 json.dump(st.session_state['credentials.json'], f)
             flow = InstalledAppFlow.from_client_secrets_file(
                 'credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        # Save the credentials for the next run
-        with open('token.json', 'w') as token:
-            token.write(creds.to_json())
+            auth_url, _ = flow.authorization_url(prompt='consent')
+
+            st.write("Please go to this URL and authorize the application:")
+            st.write(auth_url)
+
+            auth_code = st.text_input("Enter the authorization code:")
+            if auth_code:
+                flow.fetch_token(code=auth_code)
+                creds = flow.credentials
+                # Save the credentials for the next run
+                with open('token.json', 'w') as token:
+                    token.write(creds.to_json())
     return creds
 
 def main():
