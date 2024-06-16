@@ -8,6 +8,7 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import streamlit as st
+import time
 
 # If modifying these SCOPES, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/calendar.events']
@@ -59,6 +60,7 @@ def main():
     event_date = st.date_input("Enter the date you first studied the topic:")
     event_time = st.time_input("Enter the time you first studied the topic:")
     study_duration = st.number_input("Enter the duration of your study session (in minutes):", min_value=1)
+    event_subject = st.selectbox("Select the subject of the event:", ["Physics", "Chemistry", "Combined Maths", "Other"])
     event_topic = st.text_input("Enter the topic of the event:")
     event_description = st.text_area("Enter the description of the event:")
 
@@ -66,38 +68,40 @@ def main():
         if not event_topic or not event_description:
             st.error("Please fill in all the fields to schedule an event.")
         else:
-            # Combine date and time
-            event_datetime = datetime.datetime.combine(event_date, event_time)
-            event_datetime = pytz.timezone('Asia/Colombo').localize(event_datetime)
+            with st.spinner('Creating events...'):
+                # Combine date and time
+                event_datetime = datetime.datetime.combine(event_date, event_time)
+                event_datetime = pytz.timezone('Asia/Colombo').localize(event_datetime)
 
-            # Convert to Sri Lanka time zone
-            event_datetime_sri_lanka = convert_to_sri_lanka_time(event_datetime)
+                # Convert to Sri Lanka time zone
+                event_datetime_sri_lanka = convert_to_sri_lanka_time(event_datetime)
 
-            # Get the subject from the topic and determine the color ID
-            color_id = get_color_id(event_topic)
+                # Get the subject from the topic and determine the color ID
+                color_id = get_color_id(event_subject)
 
-            # Define the spaced repetition intervals in days
-            intervals = [1, 7, 16, 35, 90, 180, 365]
+                # Define the spaced repetition intervals in days
+                intervals = [1, 7, 16, 35, 90, 180, 365]
 
-            for interval in intervals:
-                event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
-                
-                event = {
-                    'summary': f"{event_topic} - Review",
-                    'description': event_description,
-                    'start': {
-                        'dateTime': event_datetime_interval.isoformat(),
-                        'timeZone': 'Asia/Colombo',
-                    },
-                    'end': {
-                        'dateTime': (event_datetime_interval + datetime.timedelta(minutes=study_duration)).isoformat(),
-                        'timeZone': 'Asia/Colombo',
-                    },
-                    'colorId': color_id,
-                }
+                for interval in intervals:
+                    event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
+                    
+                    event = {
+                        'summary': f"{event_topic} - Review",
+                        'description': event_description,
+                        'start': {
+                            'dateTime': event_datetime_interval.isoformat(),
+                            'timeZone': 'Asia/Colombo',
+                        },
+                        'end': {
+                            'dateTime': (event_datetime_interval + datetime.timedelta(minutes=study_duration)).isoformat(),
+                            'timeZone': 'Asia/Colombo',
+                        },
+                        'colorId': color_id,
+                    }
 
-                event = service.events().insert(calendarId='primary', body=event).execute()
-            st.write('Events Created Successfully ✔')
+                    event = service.events().insert(calendarId='primary', body=event).execute()
+                    time.sleep(1)  # Simulating some delay for each event creation
+                st.success('Events Created Successfully ✔')
 
 if __name__ == '__main__':
     main()
