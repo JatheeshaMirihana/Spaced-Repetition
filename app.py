@@ -25,10 +25,9 @@ def get_color_id(subject):
         return '1'  # Default (Lavender)
 
 # Function to convert time to Sri Lanka time zone
-def convert_to_sri_lanka_time(dt, tz):
+def convert_to_sri_lanka_time(dt):
     sri_lanka_tz = pytz.timezone('Asia/Colombo')
-    dt_aware = dt.astimezone(pytz.timezone(tz))
-    return dt_aware.astimezone(sri_lanka_tz)
+    return dt.astimezone(sri_lanka_tz)
 
 def main():
     """Shows basic usage of the Google Calendar API.
@@ -62,16 +61,17 @@ def main():
     study_duration = st.number_input("Enter the duration of your study session (in minutes):", min_value=1)
     event_topic = st.text_input("Enter the topic of the event:")
     event_description = st.text_area("Enter the description of the event:")
-    user_timezone = st.text_input("Enter your time zone (e.g., 'America/New_York'):", value='UTC')
 
     if st.button('Schedule Event'):
-        if not event_topic or not event_description or not user_timezone:
+        if not event_topic or not event_description:
             st.error("Please fill in all the fields to schedule an event.")
         else:
             # Combine date and time
             event_datetime = datetime.datetime.combine(event_date, event_time)
-            event_datetime = pytz.timezone(user_timezone).localize(event_datetime)
-            event_datetime_sri_lanka = convert_to_sri_lanka_time(event_datetime, user_timezone)
+            event_datetime = pytz.timezone('Asia/Colombo').localize(event_datetime)
+
+            # Convert to Sri Lanka time zone
+            event_datetime_sri_lanka = convert_to_sri_lanka_time(event_datetime)
 
             # Get the subject from the topic and determine the color ID
             color_id = get_color_id(event_topic)
