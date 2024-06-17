@@ -104,10 +104,19 @@ def main():
             with st.spinner('Creating events...'):
                 color_id = get_color_id(event_subject)
                 intervals = [1, 7, 16, 35, 90, 180, 365]
+                success = True
 
                 for interval in intervals:
                     event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
                     event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
+
+                    # Fetch existing events for the interval and check for conflicts
+                    existing_events_interval = get_existing_events(service, time_min=event_datetime_interval.isoformat(), time_max=event_end_interval.isoformat())
+
+                    if check_conflicts(event_datetime_interval, event_end_interval, existing_events_interval):
+                        st.warning(f"Conflict detected for the interval {interval} days. Skipping this event.")
+                        success = False
+                        continue
 
                     new_event = {
                         'summary': f"{event_subject} - Review",
@@ -127,7 +136,12 @@ def main():
                         service.events().insert(calendarId='primary', body=new_event).execute()
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while creating an event: {error}")
-                st.success('Events Created Successfully ✔')
+                        success = False
+
+                if success:
+                    st.success('Events Created Successfully ✔')
+                else:
+                    st.warning('Some events were not created due to conflicts.')
 
     # Set the interval for rerun
     st_autorefresh(interval=10 * 1000)  # Refresh every 10 seconds
