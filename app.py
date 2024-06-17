@@ -92,39 +92,39 @@ def main():
 
         if check_conflicts(event_datetime_sri_lanka, event_end, existing_events):
             st.warning("There are conflicting events during this time. You may need to adjust your event time.")
-
-    if st.button('Schedule Event'):
-        if not event_subject or not event_description:
-            st.error("Please fill in all the fields to schedule an event.")
         else:
-            with st.spinner('Creating events...'):
-                color_id = get_color_id(event_subject)
-                intervals = [1, 7, 16, 35, 90, 180, 365]
+            if st.button('Schedule Event'):
+                if not event_subject or not event_description:
+                    st.error("Please fill in all the fields to schedule an event.")
+                else:
+                    with st.spinner('Creating events...'):
+                        color_id = get_color_id(event_subject)
+                        intervals = [1, 7, 16, 35, 90, 180, 365]
 
-                for interval in intervals:
-                    event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
-                    event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
+                        for interval in intervals:
+                            event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
+                            event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
 
-                    new_event = {
-                        'summary': f"{event_subject} - Review",
-                        'description': event_description,
-                        'start': {
-                            'dateTime': event_datetime_interval.isoformat(),
-                            'timeZone': 'Asia/Colombo',
-                        },
-                        'end': {
-                            'dateTime': event_end_interval.isoformat(),
-                            'timeZone': 'Asia/Colombo',
-                        },
-                        'colorId': color_id,
-                    }
+                            new_event = {
+                                'summary': f"{event_subject} - Review",
+                                'description': event_description,
+                                'start': {
+                                    'dateTime': event_datetime_interval.isoformat(),
+                                    'timeZone': 'Asia/Colombo',
+                                },
+                                'end': {
+                                    'dateTime': event_end_interval.isoformat(),
+                                    'timeZone': 'Asia/Colombo',
+                                },
+                                'colorId': color_id,
+                            }
 
-                    try:
-                        service.events().insert(calendarId='primary', body=new_event).execute()
-                        time.sleep(0.2)  # Simulating some delay for each event creation
-                    except googleapiclient.errors.HttpError as error:
-                        st.error(f"An error occurred while creating an event: {error}")
-                st.success('Events Created Successfully ✔')
+                            try:
+                                service.events().insert(calendarId='primary', body=new_event).execute()
+                                time.sleep(0.2)  # Simulating some delay for each event creation
+                            except googleapiclient.errors.HttpError as error:
+                                st.error(f"An error occurred while creating an event: {error}")
+                        st.success('Events Created Successfully ✔')
 
 if __name__ == '__main__':
     main()
