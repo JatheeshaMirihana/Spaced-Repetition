@@ -3,13 +3,13 @@ import datetime
 import os.path
 import pytz
 import streamlit as st
-import time
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import googleapiclient.errors
 import google.auth.exceptions
+from streamlit_autorefresh import st_autorefresh
 
 # If modifying these SCOPES, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly', 'https://www.googleapis.com/auth/calendar.events']
@@ -89,6 +89,7 @@ def main():
         event_datetime_sri_lanka = convert_to_sri_lanka_time(event_datetime)
         event_end = event_datetime_sri_lanka + datetime.timedelta(minutes=study_duration)
         
+        # Fetch existing events and check for conflicts
         existing_events = get_existing_events(service, time_min=event_datetime_sri_lanka.isoformat(), time_max=event_end.isoformat())
 
         if check_conflicts(event_datetime_sri_lanka, event_end, existing_events):
@@ -124,12 +125,12 @@ def main():
 
                     try:
                         service.events().insert(calendarId='primary', body=new_event).execute()
-                        time.sleep(0.2)  # Simulating some delay for each event creation
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while creating an event: {error}")
                 st.success('Events Created Successfully ✔')
 
-    st.experimental_rerun()
+    # Set the interval for rerun
+    st_autorefresh(interval=10 * 1000)  # Refresh every 10 seconds
 
 if __name__ == '__main__':
     main()
