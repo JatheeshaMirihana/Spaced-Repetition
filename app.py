@@ -53,54 +53,13 @@ def get_existing_events(service, calendar_id='primary', time_min=None, time_max=
         st.error(f"An error occurred while fetching events: {error}")
         return []
 
-def parse_event_time(event_time):
-    try:
-        if 'dateTime' in event_time:
-            return datetime.datetime.fromisoformat(event_time['dateTime'][:-1])
-        elif 'date' in event_time:
-            return datetime.datetime.fromisoformat(event_time['date'])
-        else:
-            raise ValueError("Unknown time format in event")
-    except Exception as e:
-        st.error(f"Error parsing event time: {e}")
-        raise
-
 def check_conflicts(new_event_start, new_event_end, existing_events):
     for event in existing_events:
-        try:
-            existing_start = parse_event_time(event['start'])
-            existing_end = parse_event_time(event['end'])
-            if 'date' in event['start']:
-                existing_end += datetime.timedelta(days=1)  # all-day event ends at the start of the next day
-
-            if new_event_start < existing_end and new_event_end > existing_start:
-                return True
-        except KeyError as e:
-            st.error(f"KeyError in event: {e}")
-            continue
-        except ValueError as e:
-            st.error(f"ValueError in event: {e}")
-            continue
+        existing_start = datetime.datetime.fromisoformat(event['start']['dateTime'][:-1])
+        existing_end = datetime.datetime.fromisoformat(event['end']['dateTime'][:-1])
+        if new_event_start < existing_end and new_event_end > existing_start:
+            return True
     return False
-
-def get_free_time_slots(existing_events, day_start, day_end):
-    free_slots = []
-    current_time = day_start
-
-    for event in existing_events:
-        existing_start = parse_event_time(event['start'])
-        existing_end = parse_event_time(event['end'])
-        if 'date' in event['start']:
-            existing_end += datetime.timedelta(days=1)  # all-day event ends at the start of the next day
-
-        if current_time < existing_start:
-            free_slots.append((current_time, existing_start))
-        current_time = max(current_time, existing_end)
-    
-    if current_time < day_end:
-        free_slots.append((current_time, day_end))
-    
-    return free_slots
 
 def main():
     creds = get_credentials()
@@ -146,7 +105,6 @@ def main():
                 color_id = get_color_id(event_subject)
                 intervals = [1, 7, 16, 35, 90, 180, 365]
                 success = True
-                overlapping_intervals = []
 
                 for interval in intervals:
                     event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
@@ -156,7 +114,7 @@ def main():
                     existing_events_interval = get_existing_events(service, time_min=event_datetime_interval.isoformat(), time_max=event_end_interval.isoformat())
 
                     if check_conflicts(event_datetime_interval, event_end_interval, existing_events_interval):
-                        overlapping_intervals.append(interval)
+                        st.warning(f"Conflict detected for the interval {interval} days. Skipping this event.")
                         success = False
                         continue
 
@@ -180,20 +138,10 @@ def main():
                         st.error(f"An error occurred while creating an event: {error}")
                         success = False
 
-                if success:
-                    st.success('Events Created Successfully ✔')
-                else:
-                    st.warning('Some events were not created due to conflicts.')
-                    for interval in overlapping_intervals:
-                        interval_date = event_datetime_sri_lanka + datetime.timedelta(days=interval)
-                        day_start = interval_date.replace(hour=0, minute=0, second=0, microsecond=0)
-                        day_end = interval_date.replace(hour=23, minute=59, second=59, microsecond=999999)
-                        existing_events_interval = get_existing_events(service, time_min=day_start.isoformat(), time_max=day_end.isoformat())
-                        free_slots = get_free_time_slots(existing_events_interval, day_start, day_end)
-
-                        st.info(f"Suggestions for free time slots on {interval_date.strftime('%Y-%m-%d')} for the interval {interval} days:")
-                        for start, end in free_slots:
-                            st.write(f"From {start.strftime('%H:%M')} to {end.strftime('%H:%M')}")
+                # if success:
+                #     st.success('Events Created Successfully ✔')
+                # else:
+                #     st.warning('Some events were not created due to conflicts.')
 
     # Set the interval for rerun
     st_autorefresh(interval=10 * 1000)  # Refresh every 10 seconds
