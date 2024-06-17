@@ -88,43 +88,48 @@ def main():
         event_datetime = pytz.timezone('Asia/Colombo').localize(event_datetime)
         event_datetime_sri_lanka = convert_to_sri_lanka_time(event_datetime)
         event_end = event_datetime_sri_lanka + datetime.timedelta(minutes=study_duration)
+        
         existing_events = get_existing_events(service, time_min=event_datetime_sri_lanka.isoformat(), time_max=event_end.isoformat())
 
         if check_conflicts(event_datetime_sri_lanka, event_end, existing_events):
             st.warning("There are conflicting events during this time. You may need to adjust your event time.")
         else:
-            if st.button('Schedule Event'):
-                if not event_subject or not event_description:
-                    st.error("Please fill in all the fields to schedule an event.")
-                else:
-                    with st.spinner('Creating events...'):
-                        color_id = get_color_id(event_subject)
-                        intervals = [1, 7, 16, 35, 90, 180, 365]
+            st.success("No conflicts detected. You can schedule this event.")
 
-                        for interval in intervals:
-                            event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
-                            event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
+    if st.button('Schedule Event'):
+        if not event_subject or not event_description:
+            st.error("Please fill in all the fields to schedule an event.")
+        else:
+            with st.spinner('Creating events...'):
+                color_id = get_color_id(event_subject)
+                intervals = [1, 7, 16, 35, 90, 180, 365]
 
-                            new_event = {
-                                'summary': f"{event_subject} - Review",
-                                'description': event_description,
-                                'start': {
-                                    'dateTime': event_datetime_interval.isoformat(),
-                                    'timeZone': 'Asia/Colombo',
-                                },
-                                'end': {
-                                    'dateTime': event_end_interval.isoformat(),
-                                    'timeZone': 'Asia/Colombo',
-                                },
-                                'colorId': color_id,
-                            }
+                for interval in intervals:
+                    event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
+                    event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
 
-                            try:
-                                service.events().insert(calendarId='primary', body=new_event).execute()
-                                time.sleep(0.2)  # Simulating some delay for each event creation
-                            except googleapiclient.errors.HttpError as error:
-                                st.error(f"An error occurred while creating an event: {error}")
-                        st.success('Events Created Successfully ✔')
+                    new_event = {
+                        'summary': f"{event_subject} - Review",
+                        'description': event_description,
+                        'start': {
+                            'dateTime': event_datetime_interval.isoformat(),
+                            'timeZone': 'Asia/Colombo',
+                        },
+                        'end': {
+                            'dateTime': event_end_interval.isoformat(),
+                            'timeZone': 'Asia/Colombo',
+                        },
+                        'colorId': color_id,
+                    }
+
+                    try:
+                        service.events().insert(calendarId='primary', body=new_event).execute()
+                        time.sleep(0.2)  # Simulating some delay for each event creation
+                    except googleapiclient.errors.HttpError as error:
+                        st.error(f"An error occurred while creating an event: {error}")
+                st.success('Events Created Successfully ✔')
+
+    st.experimental_rerun()
 
 if __name__ == '__main__':
     main()
