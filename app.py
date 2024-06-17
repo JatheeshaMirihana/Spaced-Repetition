@@ -38,16 +38,9 @@ def get_credentials():
             creds = Credentials.from_authorized_user_file('token.json', SCOPES)
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
-                try:
-                    creds.refresh(Request())
-                except google.auth.exceptions.RefreshError:
-                    st.error("Failed to refresh credentials. Reauthentication is required.")
-                    creds = None
-            if not creds:
-                flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-                creds = flow.run_local_server(port=0)
-                with open('token.json', 'w') as token:
-                    token.write(creds.to_json())
+                creds.refresh(Request())
+            else:
+                raise google.auth.exceptions.RefreshError("Manual reauthentication required. Please perform the authentication on a local machine and transfer the token.json file.")
     except Exception as e:
         st.error(f"An error occurred during authentication: {e}")
     return creds
