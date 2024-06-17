@@ -1,22 +1,22 @@
-# Import necessary libraries
 from __future__ import print_function
 import datetime
 import os.path
 import pytz
+import streamlit as st
+import time
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
-import streamlit as st
-import time
+import googleapiclient.errors
 
 # If modifying these SCOPES, delete the file token.json.
-SCOPES = ['https://www.googleapis.com/auth/calendar.events']
+SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly', 'https://www.googleapis.com/auth/calendar.events']
 
-# Function to get color ID based on the subject
+@st.cache_data
 def get_color_id(subject):
     subject = subject.lower()
-    if subject in ['physics', 'p6','Physics']:
+    if subject in ['physics', 'p6', 'Physics']:
         return '7'  # Peacock
     elif subject in ['chemistry', 'chem']:
         return '6'  # Tangerine
@@ -25,34 +25,46 @@ def get_color_id(subject):
     else:
         return '1'  # Default (Lavender)
 
-# Function to convert time to Sri Lanka time zone
+@st.cache_data
 def convert_to_sri_lanka_time(dt):
     sri_lanka_tz = pytz.timezone('Asia/Colombo')
     return dt.astimezone(sri_lanka_tz)
 
-def main():
-    """Shows basic usage of the Google Calendar API.
-    Creates a Google Calendar API service object and adds spaced repetition events.
-    """
+@st.cache_data
+def get_credentials():
     creds = None
-    # The file token.json stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first
-    # time.
     if os.path.exists('token.json'):
         creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-    # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
+            flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
             creds = flow.run_local_server(port=0)
-        # Save the credentials for the next run
         with open('token.json', 'w') as token:
             token.write(creds.to_json())
+    return creds
 
-    service = build('calendar', 'v3', credentials=creds)
+def get_existing_events(service, calendar_id='primary', time_min=None, time_max=None):
+    events_result = service.events().list(calendarId=calendar_id, timeMin=time_min, timeMax=time_max, singleEvents=True, orderBy='startTime').execute()
+    return events_result.get('items', [])
+
+def check_conflicts(new_event_start, new_event_end, existing_events):
+    for event in existing_events:
+        existing_start = datetime.datetime.fromisoformat(event['start']['dateTime'][:-1])
+        existing_end = datetime.datetime.fromisoformat(event['end']['dateTime'][:-1])
+        if new_event_start < existing_end and new_event_end > existing_start:
+            return True
+    return False
+
+def main():
+    creds = get_credentials()
+
+    try:
+        service = build('calendar', 'v3', credentials=creds)
+    except googleapiclient.errors.HttpError as error:
+        st.error(f"An error occurred: {error}")
+        return
 
     st.title('Google Calendar Event Scheduler')
 
@@ -61,31 +73,31 @@ def main():
     event_time = st.time_input("Enter the time you first studied the topic:")
     study_duration = st.number_input("Enter the duration of your study session (in minutes):", min_value=1)
     event_subject = st.selectbox("Select the subject of the event:", ["Physics", "Chemistry", "Combined Maths", "Other"])
-    #event_topic = st.text_input("Enter the topic of the event:")
     event_description = st.text_area("Enter the description of the event:")
+
+    if event_date and event_time:
+        event_datetime = datetime.datetime.combine(event_date, event_time)
+        event_datetime = pytz.timezone('Asia/Colombo').localize(event_datetime)
+        event_datetime_sri_lanka = convert_to_sri_lanka_time(event_datetime)
+        event_end = event_datetime_sri_lanka + datetime.timedelta(minutes=study_duration)
+        existing_events = get_existing_events(service, time_min=event_datetime_sri_lanka.isoformat(), time_max=event_end.isoformat())
+
+        if check_conflicts(event_datetime_sri_lanka, event_end, existing_events):
+            st.warning("There are conflicting events during this time. You may need to adjust your event time.")
 
     if st.button('Schedule Event'):
         if not event_subject or not event_description:
             st.error("Please fill in all the fields to schedule an event.")
         else:
             with st.spinner('Creating events...'):
-                # Combine date and time
-                event_datetime = datetime.datetime.combine(event_date, event_time)
-                event_datetime = pytz.timezone('Asia/Colombo').localize(event_datetime)
-
-                # Convert to Sri Lanka time zone
-                event_datetime_sri_lanka = convert_to_sri_lanka_time(event_datetime)
-
-                # Get the subject from the topic and determine the color ID
                 color_id = get_color_id(event_subject)
-
-                # Define the spaced repetition intervals in days
                 intervals = [1, 7, 16, 35, 90, 180, 365]
 
                 for interval in intervals:
                     event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
-                    
-                    event = {
+                    event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
+
+                    new_event = {
                         'summary': f"{event_subject} - Review",
                         'description': event_description,
                         'start': {
@@ -93,13 +105,13 @@ def main():
                             'timeZone': 'Asia/Colombo',
                         },
                         'end': {
-                            'dateTime': (event_datetime_interval + datetime.timedelta(minutes=study_duration)).isoformat(),
+                            'dateTime': event_end_interval.isoformat(),
                             'timeZone': 'Asia/Colombo',
                         },
                         'colorId': color_id,
                     }
 
-                    event = service.events().insert(calendarId='primary', body=event).execute()
+                    service.events().insert(calendarId='primary', body=new_event).execute()
                     time.sleep(0.2)  # Simulating some delay for each event creation
                 st.success('Events Created Successfully ✔')
 
