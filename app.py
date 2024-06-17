@@ -92,10 +92,10 @@ def main():
         # Fetch existing events and check for conflicts
         existing_events = get_existing_events(service, time_min=event_datetime_sri_lanka.isoformat(), time_max=event_end.isoformat())
 
-        if check_conflicts(event_datetime_sri_lanka, event_end, existing_events):
-            st.warning("There are conflicting events during this time. You may need to adjust your event time.")
-        else:
-            st.success("No conflicts detected. You can schedule this event.")
+        # if check_conflicts(event_datetime_sri_lanka, event_end, existing_events):
+        #     st.warning("There are conflicting events during this time. You may need to adjust your event time.")
+        # else:
+        #     st.success("No conflicts detected. You can schedule this event.")
 
     if st.button('Schedule Event'):
         if not event_subject or not event_description:
@@ -138,10 +138,10 @@ def main():
                         st.error(f"An error occurred while creating an event: {error}")
                         success = False
 
-                # if success:
-                #     st.success('Events Created Successfully ✔')
-                # else:
-                #     st.warning('Some events were not created due to conflicts.')
+                if success:
+                    st.success('Events Created Successfully ✔')
+                else:
+                    st.warning('Some events were not created due to conflicts.')
 
     # Set the interval for rerun
     st_autorefresh(interval=10 * 1000)  # Refresh every 10 seconds
