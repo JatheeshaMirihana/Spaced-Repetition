@@ -53,16 +53,21 @@ def get_existing_events(service, calendar_id='primary', time_min=None, time_max=
         st.error(f"An error occurred while fetching events: {error}")
         return []
 
+def parse_event_time(event_time):
+    if 'dateTime' in event_time:
+        return datetime.datetime.fromisoformat(event_time['dateTime'][:-1])
+    elif 'date' in event_time:
+        return datetime.datetime.fromisoformat(event_time['date'])
+    else:
+        raise ValueError("Unknown time format in event")
+
 def check_conflicts(new_event_start, new_event_end, existing_events):
     for event in existing_events:
         try:
-            if 'dateTime' in event['start']:
-                existing_start = datetime.datetime.fromisoformat(event['start']['dateTime'][:-1])
-                existing_end = datetime.datetime.fromisoformat(event['end']['dateTime'][:-1])
-            else:
-                existing_start = datetime.datetime.fromisoformat(event['start']['date'])
-                existing_end = datetime.datetime.fromisoformat(event['end']['date'])
-                existing_end = existing_end + datetime.timedelta(days=1)  # all-day event ends at the start of the next day
+            existing_start = parse_event_time(event['start'])
+            existing_end = parse_event_time(event['end'])
+            if 'date' in event['start']:
+                existing_end += datetime.timedelta(days=1)  # all-day event ends at the start of the next day
 
             if new_event_start < existing_end and new_event_end > existing_start:
                 return True
@@ -75,13 +80,10 @@ def get_free_time_slots(existing_events, day_start, day_end):
     current_time = day_start
 
     for event in existing_events:
-        if 'dateTime' in event['start']:
-            existing_start = datetime.datetime.fromisoformat(event['start']['dateTime'][:-1])
-            existing_end = datetime.datetime.fromisoformat(event['end']['dateTime'][:-1])
-        else:
-            existing_start = datetime.datetime.fromisoformat(event['start']['date'])
-            existing_end = datetime.datetime.fromisoformat(event['end']['date'])
-            existing_end = existing_end + datetime.timedelta(days=1)  # all-day event ends at the start of the next day
+        existing_start = parse_event_time(event['start'])
+        existing_end = parse_event_time(event['end'])
+        if 'date' in event['start']:
+            existing_end += datetime.timedelta(days=1)  # all-day event ends at the start of the next day
 
         if current_time < existing_start:
             free_slots.append((current_time, existing_start))
