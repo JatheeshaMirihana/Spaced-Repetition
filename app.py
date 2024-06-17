@@ -56,8 +56,14 @@ def get_existing_events(service, calendar_id='primary', time_min=None, time_max=
 def check_conflicts(new_event_start, new_event_end, existing_events):
     for event in existing_events:
         try:
-            existing_start = datetime.datetime.fromisoformat(event['start']['dateTime'][:-1])
-            existing_end = datetime.datetime.fromisoformat(event['end']['dateTime'][:-1])
+            if 'dateTime' in event['start']:
+                existing_start = datetime.datetime.fromisoformat(event['start']['dateTime'][:-1])
+                existing_end = datetime.datetime.fromisoformat(event['end']['dateTime'][:-1])
+            else:
+                existing_start = datetime.datetime.fromisoformat(event['start']['date'])
+                existing_end = datetime.datetime.fromisoformat(event['end']['date'])
+                existing_end = existing_end + datetime.timedelta(days=1)  # all-day event ends at the start of the next day
+
             if new_event_start < existing_end and new_event_end > existing_start:
                 return True
         except KeyError:
@@ -69,10 +75,16 @@ def get_free_time_slots(existing_events, day_start, day_end):
     current_time = day_start
 
     for event in existing_events:
-        existing_start = datetime.datetime.fromisoformat(event['start']['dateTime'][:-1])
+        if 'dateTime' in event['start']:
+            existing_start = datetime.datetime.fromisoformat(event['start']['dateTime'][:-1])
+            existing_end = datetime.datetime.fromisoformat(event['end']['dateTime'][:-1])
+        else:
+            existing_start = datetime.datetime.fromisoformat(event['start']['date'])
+            existing_end = datetime.datetime.fromisoformat(event['end']['date'])
+            existing_end = existing_end + datetime.timedelta(days=1)  # all-day event ends at the start of the next day
+
         if current_time < existing_start:
             free_slots.append((current_time, existing_start))
-        existing_end = datetime.datetime.fromisoformat(event['end']['dateTime'][:-1])
         current_time = max(current_time, existing_end)
     
     if current_time < day_end:
