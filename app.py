@@ -54,12 +54,16 @@ def get_existing_events(service, calendar_id='primary', time_min=None, time_max=
         return []
 
 def parse_event_time(event_time):
-    if 'dateTime' in event_time:
-        return datetime.datetime.fromisoformat(event_time['dateTime'][:-1])
-    elif 'date' in event_time:
-        return datetime.datetime.fromisoformat(event_time['date'])
-    else:
-        raise ValueError("Unknown time format in event")
+    try:
+        if 'dateTime' in event_time:
+            return datetime.datetime.fromisoformat(event_time['dateTime'][:-1])
+        elif 'date' in event_time:
+            return datetime.datetime.fromisoformat(event_time['date'])
+        else:
+            raise ValueError("Unknown time format in event")
+    except Exception as e:
+        st.error(f"Error parsing event time: {e}")
+        raise
 
 def check_conflicts(new_event_start, new_event_end, existing_events):
     for event in existing_events:
@@ -71,7 +75,11 @@ def check_conflicts(new_event_start, new_event_end, existing_events):
 
             if new_event_start < existing_end and new_event_end > existing_start:
                 return True
-        except KeyError:
+        except KeyError as e:
+            st.error(f"KeyError in event: {e}")
+            continue
+        except ValueError as e:
+            st.error(f"ValueError in event: {e}")
             continue
     return False
 
