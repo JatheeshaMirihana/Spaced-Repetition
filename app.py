@@ -58,8 +58,30 @@ def check_conflicts(new_event_start, new_event_end, existing_events):
         existing_start = datetime.datetime.fromisoformat(event['start']['dateTime'][:-1])
         existing_end = datetime.datetime.fromisoformat(event['end']['dateTime'][:-1])
         if new_event_start < existing_end and new_event_end > existing_start:
-            return True
-    return False
+            return event
+    return None
+
+def suggest_free_times(existing_events, duration, event_datetime_sri_lanka):
+    free_times = []
+    day_start = event_datetime_sri_lanka.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + datetime.timedelta(days=1)
+    
+    current_time = day_start
+    while current_time + datetime.timedelta(minutes=duration) <= day_end:
+        conflict = False
+        for event in existing_events:
+            event_start = datetime.datetime.fromisoformat(event['start']['dateTime'][:-1])
+            event_end = datetime.datetime.fromisoformat(event['end']['dateTime'][:-1])
+            if current_time < event_end and (current_time + datetime.timedelta(minutes=duration)) > event_start:
+                conflict = True
+                current_time = event_end
+                break
+        if not conflict:
+            free_times.append(current_time)
+            current_time += datetime.timedelta(minutes=duration)
+        else:
+            current_time += datetime.timedelta(minutes=15)  # Move in 15-minute increments
+    return free_times
 
 def main():
     creds = get_credentials()
@@ -76,6 +98,24 @@ def main():
 
     st.title('Google Calendar Event Scheduler')
 
+    # Fetch all existing events on app load
+    existing_events = get_existing_events(service)
+
+    # Display existing events with edit/delete options
+    st.sidebar.title('Existing Events')
+    for event in existing_events:
+        event_start = datetime.datetime.fromisoformat(event['start']['dateTime'][:-1])
+        event_end = datetime.datetime.fromisoformat(event['end']['dateTime'][:-1])
+        st.sidebar.write(f"{event['summary']}: {event_start} - {event_end}")
+        if st.sidebar.button(f"Edit {event['id']}"):
+            st.sidebar.warning("Edit functionality not implemented yet.")
+        if st.sidebar.button(f"Delete {event['id']}"):
+            try:
+                service.events().delete(calendarId='primary', eventId=event['id']).execute()
+                st.sidebar.success(f"Event {event['id']} deleted successfully.")
+            except googleapiclient.errors.HttpError as error:
+                st.sidebar.error(f"An error occurred while deleting event {event['id']}: {error}")
+
     # Get event details from the user using Streamlit widgets
     event_date = st.date_input("Enter the date you first studied the topic:")
     event_time = st.time_input("Enter the time you first studied the topic:")
@@ -88,14 +128,23 @@ def main():
         event_datetime = pytz.timezone('Asia/Colombo').localize(event_datetime)
         event_datetime_sri_lanka = convert_to_sri_lanka_time(event_datetime)
         event_end = event_datetime_sri_lanka + datetime.timedelta(minutes=study_duration)
-        
-        # Fetch existing events and check for conflicts
-        existing_events = get_existing_events(service, time_min=event_datetime_sri_lanka.isoformat(), time_max=event_end.isoformat())
 
-        # if check_conflicts(event_datetime_sri_lanka, event_end, existing_events):
-        #     st.warning("There are conflicting events during this time. You may need to adjust your event time.")
-        # else:
-        #     st.success("No conflicts detected. You can schedule this event.")
+        # Fetch existing events and check for conflicts
+        conflicting_event = check_conflicts(event_datetime_sri_lanka, event_end, existing_events)
+        if conflicting_event:
+            st.warning(f"Conflict detected with existing event: {conflicting_event['summary']} from {conflicting_event['start']['dateTime']} to {conflicting_event['end']['dateTime']}")
+            free_times = suggest_free_times(existing_events, study_duration, event_datetime_sri_lanka)
+            if free_times:
+                st.write("Suggested free times:")
+                for free_time in free_times:
+                    if st.button(f"Schedule at {free_time}"):
+                        event_datetime_sri_lanka = free_time
+                        event_end = event_datetime_sri_lanka + datetime.timedelta(minutes=study_duration)
+                        break
+            else:
+                st.error("No free times available for the selected day.")
+        else:
+            st.success("No conflicts detected. You can schedule this event.")
 
     if st.button('Schedule Event'):
         if not event_subject or not event_description:
@@ -105,10 +154,16 @@ def main():
                 color_id = get_color_id(event_subject)
                 intervals = [1, 7, 16, 35, 90, 180, 365]
                 success = True
+                history = []
 
                 for interval in intervals:
                     event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
                     event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
+
+                    conflicting_event = check_conflicts(event_datetime_interval, event_end_interval, existing_events)
+                    if conflicting_event:
+                        st.warning(f"Conflict detected for interval {interval} days with event: {conflicting_event['summary']}")
+                        continue
 
                     new_event = {
                         'summary': f"{event_subject} - Review",
@@ -125,13 +180,21 @@ def main():
                     }
 
                     try:
-                        service.events().insert(calendarId='primary', body=new_event).execute()
+                        created_event = service.events().insert(calendarId='primary', body=new_event).execute()
+                        history.append(created_event['id'])
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while creating an event: {error}")
                         success = False
 
                 if success:
                     st.success('Events Created Successfully ✔')
+                    if st.button("Undo Events"):
+                        for event_id in history:
+                            try:
+                                service.events().delete(calendarId='primary', eventId=event_id).execute()
+                            except googleapiclient.errors.HttpError as error:
+                                st.error(f"An error occurred while deleting event {event_id}: {error}")
+                        st.success("All created events have been undone.")
                 else:
                     st.warning('Some events were not created due to conflicts.')
 
