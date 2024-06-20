@@ -38,7 +38,7 @@ def get_credentials():
         if os.path.exists('token.json'):
             creds = Credentials.from_authorized_user_file('token.json', SCOPES)
         if not creds or not creds.valid:
-            if creds and creds expired and creds.refresh_token:
+            if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
                 raise google.auth.exceptions.RefreshError("Manual reauthentication required. Please perform the authentication on a local machine and transfer the token.json file.")
