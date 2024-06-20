@@ -38,7 +38,7 @@ def get_credentials():
         if os.path.exists('token.json'):
             creds = Credentials.from_authorized_user_file('token.json', SCOPES)
         if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
+            if creds and creds expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
                 raise google.auth.exceptions.RefreshError("Manual reauthentication required. Please perform the authentication on a local machine and transfer the token.json file.")
@@ -62,7 +62,7 @@ def check_conflicts(new_event_start, new_event_end, existing_events):
             return event
     return None
 
-def suggest_free_times(existing_events, duration, event_datetime_sri_lanka):
+def suggest_free_times(existing_events, duration, event_datetime_sri_lanka, num_suggestions=4):
     free_times = []
     day_start = event_datetime_sri_lanka.replace(hour=0, minute=0, second=0, microsecond=0)
     day_end = day_start + datetime.timedelta(days=1)
@@ -79,6 +79,8 @@ def suggest_free_times(existing_events, duration, event_datetime_sri_lanka):
                 break
         if not conflict:
             free_times.append(current_time)
+            if len(free_times) >= num_suggestions:
+                break
             current_time += datetime.timedelta(minutes=duration)
         else:
             current_time += datetime.timedelta(minutes=15)  # Move in 15-minute increments
@@ -99,24 +101,32 @@ def main():
 
     st.title('Google Calendar Event Scheduler')
 
-    # Fetch all existing events on app load
-    existing_events = get_existing_events(service)
+    # Date picker for existing events preview
+    selected_date = st.sidebar.date_input("Select a date to view existing events:")
 
-    # Display existing events with edit/delete options
+    # Fetch existing events for the selected date
+    time_min = datetime.datetime.combine(selected_date, datetime.time.min).isoformat() + 'Z'
+    time_max = datetime.datetime.combine(selected_date, datetime.time.max).isoformat() + 'Z'
+    existing_events = get_existing_events(service, time_min=time_min, time_max=time_max)
+
+    # Display existing events with edit/delete options in modern UI
     st.sidebar.title('Existing Events')
     for event in existing_events:
         event_start = isoparse(event['start']['dateTime'])
         event_end = isoparse(event['end']['dateTime'])
         event_summary = event.get('summary', 'No Summary')
-        st.sidebar.write(f"{event_summary}: {event_start} - {event_end}")
-        if st.sidebar.button(f"Edit {event['id']}"):
-            st.sidebar.warning("Edit functionality not implemented yet.")
-        if st.sidebar.button(f"Delete {event['id']}"):
-            try:
-                service.events().delete(calendarId='primary', eventId=event['id']).execute()
-                st.sidebar.success(f"Event {event['id']} deleted successfully.")
-            except googleapiclient.errors.HttpError as error:
-                st.sidebar.error(f"An error occurred while deleting event {event['id']}: {error}")
+        st.sidebar.write(f"**{event_summary}**: {event_start} - {event_end}")
+        col1, col2 = st.sidebar.columns([1, 1])
+        with col1:
+            if st.button(f"Edit {event['id']}", key=f"edit_{event['id']}"):
+                st.sidebar.warning("Edit functionality not implemented yet.")
+        with col2:
+            if st.button(f"Delete {event['id']}", key=f"delete_{event['id']}"):
+                try:
+                    service.events().delete(calendarId='primary', eventId=event['id']).execute()
+                    st.sidebar.success(f"Event {event['id']} deleted successfully.")
+                except googleapiclient.errors.HttpError as error:
+                    st.sidebar.error(f"An error occurred while deleting event {event['id']}: {error}")
 
     # Get event details from the user using Streamlit widgets
     event_date = st.date_input("Enter the date you first studied the topic:")
@@ -138,11 +148,21 @@ def main():
             free_times = suggest_free_times(existing_events, study_duration, event_datetime_sri_lanka)
             if free_times:
                 st.write("Suggested free times:")
-                for free_time in free_times:
-                    if st.button(f"Schedule at {free_time}"):
-                        event_datetime_sri_lanka = free_time
-                        event_end = event_datetime_sri_lanka + datetime.timedelta(minutes=study_duration)
-                        break
+                col1, col2 = st.columns(2)
+                with col1:
+                    if free_times:
+                        st.button(f"Schedule at {free_times[0]}", key=f"suggest_0")
+                    if len(free_times) > 1:
+                        st.button(f"Schedule at {free_times[1]}", key=f"suggest_1")
+                with col2:
+                    if len(free_times) > 2:
+                        st.button(f"Schedule at {free_times[2]}", key=f"suggest_2")
+                    if len(free_times) > 3:
+                        st.button(f"Schedule at {free_times[3]}", key=f"suggest_3")
+                if len(free_times) > 4:
+                    if st.button("View More"):
+                        for i in range(4, len(free_times)):
+                            st.button(f"Schedule at {free_times[i]}", key=f"suggest_{i}")
             else:
                 st.error("No free times available for the selected day.")
         else:
@@ -200,8 +220,8 @@ def main():
                 else:
                     st.warning('Some events were not created due to conflicts.')
 
-    # Set the interval for rerun
-    st_autorefresh(interval=10 * 1000)  # Refresh every 10 seconds
+    # Set the interval for rerun (without refreshing the whole app)
+    st_autorefresh(interval=10 * 1000, key="data_refresh")
 
 if __name__ == '__main__':
     main()
