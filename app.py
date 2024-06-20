@@ -182,7 +182,7 @@ def main():
             free_times = suggest_free_times(existing_events, study_duration, event_datetime_sri_lanka)
             st.session_state.free_times["initial"] = free_times
         else:
-            st.session_state.conflicts.pop("initial", None)
+            st.session_state.conflicts = [conflict for conflict in st.session_state.conflicts if conflict["interval"] != "initial"]
             st.session_state.free_times.pop("initial", None)
             st.success("No conflicts detected. You can schedule this event.")
 
@@ -245,7 +245,7 @@ def main():
                         if schedule_event(service, event_subject, event_description, get_color_id(event_subject), free_time, conflict['study_duration']):
                             st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
                             st.session_state.free_times.pop(conflict['interval'], None)
-                            st.session_state.conflicts.remove(conflict)
+                            st.session_state.conflicts = [c for c in st.session_state.conflicts if c != conflict]
                             st.experimental_rerun()
             with col2:
                 for i, free_time in enumerate(free_times[2:4]):
@@ -253,7 +253,7 @@ def main():
                         if schedule_event(service, event_subject, event_description, get_color_id(event_subject), free_time, conflict['study_duration']):
                             st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
                             st.session_state.free_times.pop(conflict['interval'], None)
-                            st.session_state.conflicts.remove(conflict)
+                            st.session_state.conflicts = [c for c in st.session_state.conflicts if c != conflict]
                             st.experimental_rerun()
             if len(free_times) > 4:
                 if st.button(f"View More for interval {conflict['interval']} days"):
@@ -262,7 +262,7 @@ def main():
                             if schedule_event(service, event_subject, event_description, get_color_id(event_subject), free_time, conflict['study_duration']):
                                 st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
                                 st.session_state.free_times.pop(conflict['interval'], None)
-                                st.session_state.conflicts.remove(conflict)
+                                st.session_state.conflicts = [c for c in st.session_state.conflicts if c != conflict]
                                 st.experimental_rerun()
 
     # Set the interval for rerun (without refreshing the whole app)
