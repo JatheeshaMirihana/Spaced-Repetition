@@ -87,6 +87,11 @@ def suggest_free_times(existing_events, duration, event_datetime_sri_lanka, num_
     return free_times
 
 def main():
+    if "conflicts" not in st.session_state:
+        st.session_state.conflicts = {}
+    if "free_times" not in st.session_state:
+        st.session_state.free_times = {}
+
     creds = get_credentials()
 
     if not creds:
@@ -144,29 +149,33 @@ def main():
         # Fetch existing events and check for conflicts
         conflicting_event = check_conflicts(event_datetime_sri_lanka, event_end, existing_events)
         if conflicting_event:
-            st.warning(f"Conflict detected with existing event: {conflicting_event.get('summary', 'No Summary')} from {conflicting_event['start']['dateTime']} to {conflicting_event['end']['dateTime']}")
+            st.session_state.conflicts["initial"] = f"Conflict detected with existing event: {conflicting_event.get('summary', 'No Summary')} from {conflicting_event['start']['dateTime']} to {conflicting_event['end']['dateTime']}"
+            st.warning(st.session_state.conflicts["initial"])
             free_times = suggest_free_times(existing_events, study_duration, event_datetime_sri_lanka)
-            if free_times:
-                st.write("Suggested free times:")
-                col1, col2 = st.columns(2)
-                with col1:
-                    if free_times:
-                        st.button(f"Schedule at {free_times[0]}", key=f"suggest_0")
-                    if len(free_times) > 1:
-                        st.button(f"Schedule at {free_times[1]}", key=f"suggest_1")
-                with col2:
-                    if len(free_times) > 2:
-                        st.button(f"Schedule at {free_times[2]}", key=f"suggest_2")
-                    if len(free_times) > 3:
-                        st.button(f"Schedule at {free_times[3]}", key=f"suggest_3")
-                if len(free_times) > 4:
-                    if st.button("View More"):
-                        for i in range(4, len(free_times)):
-                            st.button(f"Schedule at {free_times[i]}", key=f"suggest_{i}")
-            else:
-                st.error("No free times available for the selected day.")
+            st.session_state.free_times["initial"] = free_times
         else:
+            st.session_state.conflicts.pop("initial", None)
+            st.session_state.free_times.pop("initial", None)
             st.success("No conflicts detected. You can schedule this event.")
+
+    if "initial" in st.session_state.free_times:
+        free_times = st.session_state.free_times["initial"]
+        st.write("Suggested free times:")
+        col1, col2 = st.columns(2)
+        with col1:
+            if free_times:
+                st.button(f"Schedule at {free_times[0]}", key=f"suggest_0")
+            if len(free_times) > 1:
+                st.button(f"Schedule at {free_times[1]}", key=f"suggest_1")
+        with col2:
+            if len(free_times) > 2:
+                st.button(f"Schedule at {free_times[2]}", key=f"suggest_2")
+            if len(free_times) > 3:
+                st.button(f"Schedule at {free_times[3]}", key=f"suggest_3")
+        if len(free_times) > 4:
+            if st.button("View More"):
+                for i in range(4, len(free_times)):
+                    st.button(f"Schedule at {free_times[i]}", key=f"suggest_{i}")
 
     if st.button('Schedule Event'):
         if not event_subject or not event_description:
@@ -184,27 +193,10 @@ def main():
 
                     conflicting_event = check_conflicts(event_datetime_interval, event_end_interval, existing_events)
                     if conflicting_event:
-                        st.warning(f"Conflict detected for interval {interval} days with event: {conflicting_event.get('summary', 'No Summary')}")
+                        st.session_state.conflicts[interval] = f"Conflict detected for interval {interval} days with event: {conflicting_event.get('summary', 'No Summary')}"
+                        st.warning(st.session_state.conflicts[interval])
                         free_times = suggest_free_times(existing_events, study_duration, event_datetime_interval)
-                        if free_times:
-                            st.write(f"Suggested free times for interval {interval} days:")
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                if free_times:
-                                    st.button(f"Schedule at {free_times[0]}", key=f"suggest_{interval}_0")
-                                if len(free_times) > 1:
-                                    st.button(f"Schedule at {free_times[1]}", key=f"suggest_{interval}_1")
-                            with col2:
-                                if len(free_times) > 2:
-                                    st.button(f"Schedule at {free_times[2]}", key=f"suggest_{interval}_2")
-                                if len(free_times) > 3:
-                                    st.button(f"Schedule at {free_times[3]}", key=f"suggest_{interval}_3")
-                            if len(free_times) > 4:
-                                if st.button(f"View More for interval {interval} days"):
-                                    for i in range(4, len(free_times)):
-                                        st.button(f"Schedule at {free_times[i]}", key=f"suggest_{interval}_{i}")
-                        else:
-                            st.error(f"No free times available for interval {interval} days.")
+                        st.session_state.free_times[interval] = free_times
                         continue
 
                     new_event = {
@@ -239,6 +231,27 @@ def main():
                         st.success("All created events have been undone.")
                 else:
                     st.warning('Some events were not created due to conflicts.')
+
+    for interval in st.session_state.free_times:
+        if interval == "initial":
+            continue
+        free_times = st.session_state.free_times[interval]
+        st.write(f"Suggested free times for interval {interval} days:")
+        col1, col2 = st.columns(2)
+        with col1:
+            if free_times:
+                st.button(f"Schedule at {free_times[0]}", key=f"suggest_{interval}_0")
+            if len(free_times) > 1:
+                st.button(f"Schedule at {free_times[1]}", key=f"suggest_{interval}_1")
+        with col2:
+            if len(free_times) > 2:
+                st.button(f"Schedule at {free_times[2]}", key=f"suggest_{interval}_2")
+            if len(free_times) > 3:
+                st.button(f"Schedule at {free_times[3]}", key=f"suggest_{interval}_3")
+        if len(free_times) > 4:
+            if st.button(f"View More for interval {interval} days"):
+                for i in range(4, len(free_times)):
+                    st.button(f"Schedule at {free_times[i]}", key=f"suggest_{interval}_{i}")
 
     # Set the interval for rerun (without refreshing the whole app)
     st_autorefresh(interval=10 * 1000, key="data_refresh")
