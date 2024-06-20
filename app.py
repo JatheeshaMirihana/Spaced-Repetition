@@ -185,6 +185,26 @@ def main():
                     conflicting_event = check_conflicts(event_datetime_interval, event_end_interval, existing_events)
                     if conflicting_event:
                         st.warning(f"Conflict detected for interval {interval} days with event: {conflicting_event.get('summary', 'No Summary')}")
+                        free_times = suggest_free_times(existing_events, study_duration, event_datetime_interval)
+                        if free_times:
+                            st.write(f"Suggested free times for interval {interval} days:")
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if free_times:
+                                    st.button(f"Schedule at {free_times[0]}", key=f"suggest_{interval}_0")
+                                if len(free_times) > 1:
+                                    st.button(f"Schedule at {free_times[1]}", key=f"suggest_{interval}_1")
+                            with col2:
+                                if len(free_times) > 2:
+                                    st.button(f"Schedule at {free_times[2]}", key=f"suggest_{interval}_2")
+                                if len(free_times) > 3:
+                                    st.button(f"Schedule at {free_times[3]}", key=f"suggest_{interval}_3")
+                            if len(free_times) > 4:
+                                if st.button(f"View More for interval {interval} days"):
+                                    for i in range(4, len(free_times)):
+                                        st.button(f"Schedule at {free_times[i]}", key=f"suggest_{interval}_{i}")
+                        else:
+                            st.error(f"No free times available for interval {interval} days.")
                         continue
 
                     new_event = {
