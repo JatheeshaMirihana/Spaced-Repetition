@@ -192,6 +192,7 @@ def main():
                         st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
                         st.session_state.free_times.pop("initial", None)
                         st.session_state.conflicts.pop("initial", None)
+                        st.experimental_rerun()
         with col2:
             for i, free_time in enumerate(free_times[2:4]):
                 if st.button(f"Schedule at {free_time.strftime('%H:%M')}", key=f"suggest_{i+2}"):
@@ -199,6 +200,7 @@ def main():
                         st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
                         st.session_state.free_times.pop("initial", None)
                         st.session_state.conflicts.pop("initial", None)
+                        st.experimental_rerun()
         if len(free_times) > 4:
             if st.button("View More"):
                 for i, free_time in enumerate(free_times[4:]):
@@ -207,6 +209,7 @@ def main():
                             st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
                             st.session_state.free_times.pop("initial", None)
                             st.session_state.conflicts.pop("initial", None)
+                            st.experimental_rerun()
 
     if st.button('Schedule Event'):
         if not event_subject or not event_description:
@@ -216,8 +219,6 @@ def main():
                 color_id = get_color_id(event_subject)
                 intervals = [1, 7, 16, 35, 90, 180, 365]
                 success = True
-                st.session_state.conflicts = {}
-                st.session_state.free_times = {}
                 st.session_state.history = []
 
                 for interval in intervals:
@@ -230,14 +231,15 @@ def main():
                         st.warning(st.session_state.conflicts[interval])
                         free_times = suggest_free_times(existing_events, study_duration, event_datetime_interval)
                         st.session_state.free_times[interval] = free_times
-                        continue
+                        st.session_state.current_conflict = interval
+                        break
 
                     if schedule_event(service, event_subject, event_description, color_id, event_datetime_interval, study_duration):
                         st.session_state.history.append((interval, event_datetime_interval.strftime('%Y-%m-%d %H:%M')))
                     else:
                         success = False
 
-                if success:
+                if success and "current_conflict" not in st.session_state:
                     st.success('Events Created Successfully ✔')
                     if st.button("Undo Events"):
                         for interval, event_datetime_str in st.session_state.history:
@@ -250,12 +252,11 @@ def main():
                                 except googleapiclient.errors.HttpError as error:
                                     st.error(f"An error occurred while deleting event {existing_event['id']}: {error}")
                         st.session_state.history = []
-                else:
+                elif not success:
                     st.warning('Some events were not created due to conflicts.')
 
-    for interval in st.session_state.free_times:
-        if interval == "initial":
-            continue
+    if "current_conflict" in st.session_state:
+        interval = st.session_state.current_conflict
         free_times = st.session_state.free_times[interval]
         st.write(f"Suggested free times for interval {interval} days:")
         col1, col2 = st.columns(2)
@@ -266,6 +267,8 @@ def main():
                         st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
                         st.session_state.free_times.pop(interval, None)
                         st.session_state.conflicts.pop(interval, None)
+                        st.session_state.current_conflict = None
+                        st.experimental_rerun()
         with col2:
             for i, free_time in enumerate(free_times[2:4]):
                 if st.button(f"Schedule at {free_time.strftime('%H:%M')}", key=f"suggest_{interval}_{i+2}"):
@@ -273,6 +276,8 @@ def main():
                         st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
                         st.session_state.free_times.pop(interval, None)
                         st.session_state.conflicts.pop(interval, None)
+                        st.session_state.current_conflict = None
+                        st.experimental_rerun()
         if len(free_times) > 4:
             if st.button(f"View More for interval {interval} days"):
                 for i, free_time in enumerate(free_times[4:]):
@@ -281,6 +286,8 @@ def main():
                             st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
                             st.session_state.free_times.pop(interval, None)
                             st.session_state.conflicts.pop(interval, None)
+                            st.session_state.current_conflict = None
+                            st.experimental_rerun()
 
     # Set the interval for rerun (without refreshing the whole app)
     st_autorefresh(interval=10 * 1000, key="data_refresh")
