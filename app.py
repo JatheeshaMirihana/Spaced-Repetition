@@ -107,7 +107,8 @@ def main():
     for event in existing_events:
         event_start = isoparse(event['start']['dateTime'])
         event_end = isoparse(event['end']['dateTime'])
-        st.sidebar.write(f"{event['summary']}: {event_start} - {event_end}")
+        event_summary = event.get('summary', 'No Summary')
+        st.sidebar.write(f"{event_summary}: {event_start} - {event_end}")
         if st.sidebar.button(f"Edit {event['id']}"):
             st.sidebar.warning("Edit functionality not implemented yet.")
         if st.sidebar.button(f"Delete {event['id']}"):
@@ -133,7 +134,7 @@ def main():
         # Fetch existing events and check for conflicts
         conflicting_event = check_conflicts(event_datetime_sri_lanka, event_end, existing_events)
         if conflicting_event:
-            st.warning(f"Conflict detected with existing event: {conflicting_event['summary']} from {conflicting_event['start']['dateTime']} to {conflicting_event['end']['dateTime']}")
+            st.warning(f"Conflict detected with existing event: {conflicting_event.get('summary', 'No Summary')} from {conflicting_event['start']['dateTime']} to {conflicting_event['end']['dateTime']}")
             free_times = suggest_free_times(existing_events, study_duration, event_datetime_sri_lanka)
             if free_times:
                 st.write("Suggested free times:")
@@ -163,7 +164,7 @@ def main():
 
                     conflicting_event = check_conflicts(event_datetime_interval, event_end_interval, existing_events)
                     if conflicting_event:
-                        st.warning(f"Conflict detected for interval {interval} days with event: {conflicting_event['summary']}")
+                        st.warning(f"Conflict detected for interval {interval} days with event: {conflicting_event.get('summary', 'No Summary')}")
                         continue
 
                     new_event = {
