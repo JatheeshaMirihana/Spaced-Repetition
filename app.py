@@ -186,6 +186,8 @@ def main():
                 intervals = [1, 7, 16, 35, 90, 180, 365]
                 success = True
                 history = []
+                st.session_state.conflicts = {}
+                st.session_state.free_times = {}
 
                 for interval in intervals:
                     event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
