@@ -110,14 +110,6 @@ def main():
                     event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
                     event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
 
-                    # Fetch existing events for the interval and check for conflicts
-                    existing_events_interval = get_existing_events(service, time_min=event_datetime_interval.isoformat(), time_max=event_end_interval.isoformat())
-
-                    if check_conflicts(event_datetime_interval, event_end_interval, existing_events_interval):
-                        st.warning(f"Conflict detected for the interval {interval} days. Skipping this event.")
-                        success = False
-                        continue
-
                     new_event = {
                         'summary': f"{event_subject} - Review",
                         'description': event_description,
