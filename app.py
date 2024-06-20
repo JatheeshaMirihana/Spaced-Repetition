@@ -64,8 +64,8 @@ def check_conflicts(new_event_start, new_event_end, existing_events):
 
 def suggest_free_times(existing_events, duration, event_datetime_sri_lanka, num_suggestions=4):
     free_times = []
-    day_start = event_datetime_sri_lanka.replace(hour=4, minute=0, second=0, microsecond=0)
-    day_end = event_datetime_sri_lanka.replace(hour=22, minute=0, second=0, microsecond=0)
+    day_start = event_datetime_sri_lanka.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + datetime.timedelta(days=1)
     
     current_time = day_start
     while current_time + datetime.timedelta(minutes=duration) <= day_end:
@@ -86,34 +86,11 @@ def suggest_free_times(existing_events, duration, event_datetime_sri_lanka, num_
             current_time += datetime.timedelta(minutes=15)  # Move in 15-minute increments
     return free_times
 
-def schedule_event(service, event_subject, event_description, color_id, event_datetime, duration, timezone='Asia/Colombo'):
-    new_event = {
-        'summary': f"{event_subject} - Review",
-        'description': event_description,
-        'start': {
-            'dateTime': event_datetime.isoformat(),
-            'timeZone': timezone,
-        },
-        'end': {
-            'dateTime': (event_datetime + datetime.timedelta(minutes=duration)).isoformat(),
-            'timeZone': timezone,
-        },
-        'colorId': color_id,
-    }
-    try:
-        service.events().insert(calendarId='primary', body=new_event).execute()
-        return True
-    except googleapiclient.errors.HttpError as error:
-        st.error(f"An error occurred while creating an event: {error}")
-        return False
-
 def main():
     if "conflicts" not in st.session_state:
         st.session_state.conflicts = {}
     if "free_times" not in st.session_state:
         st.session_state.free_times = {}
-    if "history" not in st.session_state:
-        st.session_state.history = []
 
     creds = get_credentials()
 
@@ -186,27 +163,19 @@ def main():
         st.write("Suggested free times:")
         col1, col2 = st.columns(2)
         with col1:
-            for i, free_time in enumerate(free_times[:2]):
-                if st.button(f"Schedule at {free_time.strftime('%H:%M')}", key=f"suggest_{i}"):
-                    if schedule_event(service, event_subject, event_description, get_color_id(event_subject), free_time, study_duration):
-                        st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
-                        st.session_state.free_times.pop("initial", None)
-                        st.session_state.conflicts.pop("initial", None)
+            if free_times:
+                st.button(f"Schedule at {free_times[0]}", key=f"suggest_0")
+            if len(free_times) > 1:
+                st.button(f"Schedule at {free_times[1]}", key=f"suggest_1")
         with col2:
-            for i, free_time in enumerate(free_times[2:4]):
-                if st.button(f"Schedule at {free_time.strftime('%H:%M')}", key=f"suggest_{i+2}"):
-                    if schedule_event(service, event_subject, event_description, get_color_id(event_subject), free_time, study_duration):
-                        st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
-                        st.session_state.free_times.pop("initial", None)
-                        st.session_state.conflicts.pop("initial", None)
+            if len(free_times) > 2:
+                st.button(f"Schedule at {free_times[2]}", key=f"suggest_2")
+            if len(free_times) > 3:
+                st.button(f"Schedule at {free_times[3]}", key=f"suggest_3")
         if len(free_times) > 4:
             if st.button("View More"):
-                for i, free_time in enumerate(free_times[4:]):
-                    if st.button(f"Schedule at {free_time.strftime('%H:%M')}", key=f"suggest_{i+4}"):
-                        if schedule_event(service, event_subject, event_description, get_color_id(event_subject), free_time, study_duration):
-                            st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
-                            st.session_state.free_times.pop("initial", None)
-                            st.session_state.conflicts.pop("initial", None)
+                for i in range(4, len(free_times)):
+                    st.button(f"Schedule at {free_times[i]}", key=f"suggest_{i}")
 
     if st.button('Schedule Event'):
         if not event_subject or not event_description:
@@ -216,9 +185,8 @@ def main():
                 color_id = get_color_id(event_subject)
                 intervals = [1, 7, 16, 35, 90, 180, 365]
                 success = True
-                st.session_state.conflicts = {}
-                st.session_state.free_times = {}
-                st.session_state.history = []
+                history = []
+                new_conflicts = False
 
                 for interval in intervals:
                     event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
@@ -230,27 +198,40 @@ def main():
                         st.warning(st.session_state.conflicts[interval])
                         free_times = suggest_free_times(existing_events, study_duration, event_datetime_interval)
                         st.session_state.free_times[interval] = free_times
+                        new_conflicts = True
                         continue
 
-                    if schedule_event(service, event_subject, event_description, color_id, event_datetime_interval, study_duration):
-                        st.session_state.history.append((interval, event_datetime_interval.strftime('%Y-%m-%d %H:%M')))
-                    else:
+                    new_event = {
+                        'summary': f"{event_subject} - Review",
+                        'description': event_description,
+                        'start': {
+                            'dateTime': event_datetime_interval.isoformat(),
+                            'timeZone': 'Asia/Colombo',
+                        },
+                        'end': {
+                            'dateTime': event_end_interval.isoformat(),
+                            'timeZone': 'Asia/Colombo',
+                        },
+                        'colorId': color_id,
+                    }
+
+                    try:
+                        created_event = service.events().insert(calendarId='primary', body=new_event).execute()
+                        history.append(created_event['id'])
+                    except googleapiclient.errors.HttpError as error:
+                        st.error(f"An error occurred while creating an event: {error}")
                         success = False
 
-                if success:
+                if success and not new_conflicts:
                     st.success('Events Created Successfully ✔')
                     if st.button("Undo Events"):
-                        for interval, event_datetime_str in st.session_state.history:
-                            event_datetime_interval = datetime.datetime.strptime(event_datetime_str, '%Y-%m-%d %H:%M').replace(tzinfo=pytz.timezone('Asia/Colombo'))
-                            existing_event = check_conflicts(event_datetime_interval, event_datetime_interval + datetime.timedelta(minutes=study_duration), existing_events)
-                            if existing_event:
-                                try:
-                                    service.events().delete(calendarId='primary', eventId=existing_event['id']).execute()
-                                    st.success(f"Event for interval {interval} days deleted successfully.")
-                                except googleapiclient.errors.HttpError as error:
-                                    st.error(f"An error occurred while deleting event {existing_event['id']}: {error}")
-                        st.session_state.history = []
-                else:
+                        for event_id in history:
+                            try:
+                                service.events().delete(calendarId='primary', eventId=event_id).execute()
+                            except googleapiclient.errors.HttpError as error:
+                                st.error(f"An error occurred while deleting event {event_id}: {error}")
+                        st.success("All created events have been undone.")
+                elif not success:
                     st.warning('Some events were not created due to conflicts.')
 
     for interval in st.session_state.free_times:
@@ -260,27 +241,19 @@ def main():
         st.write(f"Suggested free times for interval {interval} days:")
         col1, col2 = st.columns(2)
         with col1:
-            for i, free_time in enumerate(free_times[:2]):
-                if st.button(f"Schedule at {free_time.strftime('%H:%M')}", key=f"suggest_{interval}_{i}"):
-                    if schedule_event(service, event_subject, event_description, get_color_id(event_subject), free_time, study_duration):
-                        st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
-                        st.session_state.free_times.pop(interval, None)
-                        st.session_state.conflicts.pop(interval, None)
+            if free_times:
+                st.button(f"Schedule at {free_times[0]}", key=f"suggest_{interval}_0")
+            if len(free_times) > 1:
+                st.button(f"Schedule at {free_times[1]}", key=f"suggest_{interval}_1")
         with col2:
-            for i, free_time in enumerate(free_times[2:4]):
-                if st.button(f"Schedule at {free_time.strftime('%H:%M')}", key=f"suggest_{interval}_{i+2}"):
-                    if schedule_event(service, event_subject, event_description, get_color_id(event_subject), free_time, study_duration):
-                        st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
-                        st.session_state.free_times.pop(interval, None)
-                        st.session_state.conflicts.pop(interval, None)
+            if len(free_times) > 2:
+                st.button(f"Schedule at {free_times[2]}", key=f"suggest_{interval}_2")
+            if len(free_times) > 3:
+                st.button(f"Schedule at {free_times[3]}", key=f"suggest_{interval}_3")
         if len(free_times) > 4:
             if st.button(f"View More for interval {interval} days"):
-                for i, free_time in enumerate(free_times[4:]):
-                    if st.button(f"Schedule at {free_time.strftime('%H:%M')}", key=f"suggest_{interval}_{i+4}"):
-                        if schedule_event(service, event_subject, event_description, get_color_id(event_subject), free_time, study_duration):
-                            st.success(f"Event scheduled at {free_time.strftime('%H:%M')}")
-                            st.session_state.free_times.pop(interval, None)
-                            st.session_state.conflicts.pop(interval, None)
+                for i in range(4, len(free_times)):
+                    st.button(f"Schedule at {free_times[i]}", key=f"suggest_{interval}_{i}")
 
     # Set the interval for rerun (without refreshing the whole app)
     st_autorefresh(interval=10 * 1000, key="data_refresh")
