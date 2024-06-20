@@ -186,8 +186,7 @@ def main():
                 intervals = [1, 7, 16, 35, 90, 180, 365]
                 success = True
                 history = []
-                st.session_state.conflicts = {}
-                st.session_state.free_times = {}
+                new_conflicts = False
 
                 for interval in intervals:
                     event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
@@ -199,6 +198,7 @@ def main():
                         st.warning(st.session_state.conflicts[interval])
                         free_times = suggest_free_times(existing_events, study_duration, event_datetime_interval)
                         st.session_state.free_times[interval] = free_times
+                        new_conflicts = True
                         continue
 
                     new_event = {
@@ -222,7 +222,7 @@ def main():
                         st.error(f"An error occurred while creating an event: {error}")
                         success = False
 
-                if success:
+                if success and not new_conflicts:
                     st.success('Events Created Successfully ✔')
                     if st.button("Undo Events"):
                         for event_id in history:
@@ -231,7 +231,7 @@ def main():
                             except googleapiclient.errors.HttpError as error:
                                 st.error(f"An error occurred while deleting event {event_id}: {error}")
                         st.success("All created events have been undone.")
-                else:
+                elif not success:
                     st.warning('Some events were not created due to conflicts.')
 
     for interval in st.session_state.free_times:
