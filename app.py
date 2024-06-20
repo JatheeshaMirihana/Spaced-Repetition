@@ -234,26 +234,26 @@ def main():
                 elif not success:
                     st.warning('Some events were not created due to conflicts.')
 
-    for interval in st.session_state.free_times:
-        if interval == "initial":
-            continue
-        free_times = st.session_state.free_times[interval]
-        st.write(f"Suggested free times for interval {interval} days:")
-        col1, col2 = st.columns(2)
-        with col1:
-            if free_times:
-                st.button(f"Schedule at {free_times[0]}", key=f"suggest_{interval}_0")
-            if len(free_times) > 1:
-                st.button(f"Schedule at {free_times[1]}", key=f"suggest_{interval}_1")
-        with col2:
-            if len(free_times) > 2:
-                st.button(f"Schedule at {free_times[2]}", key=f"suggest_{interval}_2")
-            if len(free_times) > 3:
-                st.button(f"Schedule at {free_times[3]}", key=f"suggest_{interval}_3")
-        if len(free_times) > 4:
-            if st.button(f"View More for interval {interval} days"):
-                for i in range(4, len(free_times)):
-                    st.button(f"Schedule at {free_times[i]}", key=f"suggest_{interval}_{i}")
+    # for interval in st.session_state.free_times:
+    #     if interval == "initial":
+    #         continue
+    #     free_times = st.session_state.free_times[interval]
+    #     st.write(f"Suggested free times for interval {interval} days:")
+    #     col1, col2 = st.columns(2)
+    #     with col1:
+    #         if free_times:
+    #             st.button(f"Schedule at {free_times[0]}", key=f"suggest_{interval}_0")
+    #         if len(free_times) > 1:
+    #             st.button(f"Schedule at {free_times[1]}", key=f"suggest_{interval}_1")
+    #     with col2:
+    #         if len(free_times) > 2:
+    #             st.button(f"Schedule at {free_times[2]}", key=f"suggest_{interval}_2")
+    #         if len(free_times) > 3:
+    #             st.button(f"Schedule at {free_times[3]}", key=f"suggest_{interval}_3")
+    #     if len(free_times) > 4:
+    #         if st.button(f"View More for interval {interval} days"):
+    #             for i in range(4, len(free_times)):
+    #                 st.button(f"Schedule at {free_times[i]}", key=f"suggest_{interval}_{i}")
 
     # Set the interval for rerun (without refreshing the whole app)
     st_autorefresh(interval=10 * 1000, key="data_refresh")
