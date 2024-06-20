@@ -10,6 +10,7 @@ from googleapiclient.discovery import build
 import googleapiclient.errors
 import google.auth.exceptions
 from streamlit_autorefresh import st_autorefresh
+from dateutil.parser import isoparse
 
 # If modifying these SCOPES, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly', 'https://www.googleapis.com/auth/calendar.events']
@@ -55,8 +56,8 @@ def get_existing_events(service, calendar_id='primary', time_min=None, time_max=
 
 def check_conflicts(new_event_start, new_event_end, existing_events):
     for event in existing_events:
-        existing_start = datetime.datetime.fromisoformat(event['start']['dateTime'][:-1])
-        existing_end = datetime.datetime.fromisoformat(event['end']['dateTime'][:-1])
+        existing_start = isoparse(event['start']['dateTime'])
+        existing_end = isoparse(event['end']['dateTime'])
         if new_event_start < existing_end and new_event_end > existing_start:
             return event
     return None
@@ -70,8 +71,8 @@ def suggest_free_times(existing_events, duration, event_datetime_sri_lanka):
     while current_time + datetime.timedelta(minutes=duration) <= day_end:
         conflict = False
         for event in existing_events:
-            event_start = datetime.datetime.fromisoformat(event['start']['dateTime'][:-1])
-            event_end = datetime.datetime.fromisoformat(event['end']['dateTime'][:-1])
+            event_start = isoparse(event['start']['dateTime'])
+            event_end = isoparse(event['end']['dateTime'])
             if current_time < event_end and (current_time + datetime.timedelta(minutes=duration)) > event_start:
                 conflict = True
                 current_time = event_end
@@ -104,8 +105,8 @@ def main():
     # Display existing events with edit/delete options
     st.sidebar.title('Existing Events')
     for event in existing_events:
-        event_start = datetime.datetime.fromisoformat(event['start']['dateTime'][:-1])
-        event_end = datetime.datetime.fromisoformat(event['end']['dateTime'][:-1])
+        event_start = isoparse(event['start']['dateTime'])
+        event_end = isoparse(event['end']['dateTime'])
         st.sidebar.write(f"{event['summary']}: {event_start} - {event_end}")
         if st.sidebar.button(f"Edit {event['id']}"):
             st.sidebar.warning("Edit functionality not implemented yet.")
