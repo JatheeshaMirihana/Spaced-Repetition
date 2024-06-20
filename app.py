@@ -123,13 +123,13 @@ def main():
         st.sidebar.write(f"**{event_summary}**: {event_start} - {event_end}")
         col1, col2 = st.sidebar.columns([1, 1])
         with col1:
-            if st.button(f"Edit {event['id']}", key=f"edit_{event['id']}"):
+            if st.button(f"Edit", key=f"edit_{event['id']}"):
                 st.sidebar.warning("Edit functionality not implemented yet.")
         with col2:
-            if st.button(f"Delete {event['id']}", key=f"delete_{event['id']}"):
+            if st.button(f"Delete", key=f"delete_{event['id']}"):
                 try:
                     service.events().delete(calendarId='primary', eventId=event['id']).execute()
-                    st.sidebar.success(f"Event {event['id']} deleted successfully.")
+                    st.sidebar.success(f"Event deleted successfully.")
                 except googleapiclient.errors.HttpError as error:
                     st.sidebar.error(f"An error occurred while deleting event {event['id']}: {error}")
 
