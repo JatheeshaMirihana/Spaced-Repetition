@@ -95,7 +95,17 @@ def main():
     # Display progress tracker on the right sidebar
     with st.sidebar.container():
         st.sidebar.title('Progress Tracker')
-        st.sidebar.progress(progress_percentage, text_color='lightgreen')
+        st.sidebar.markdown(
+            f"""
+            <div style="background-color: lightgreen; padding: 10px; margin-bottom: 10px;">
+                <div style="width: 100%; background-color: #ddd;">
+                    <div style="width: {progress_percentage}%; height: 30px; background-color: lightgreen;"></div>
+                </div>
+                <p>{progress_percentage:.2f}% completed</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         st.sidebar.write(f"Completed: {completed_events}/{total_events} events")
         st.sidebar.write(f"Current streak: {streak_counter} days")
         st.sidebar.write(f"Missed events: {missed_events}")
