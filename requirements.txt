@@ -6,3 +6,4 @@ pytz
 streamlit
 streamlit_autorefresh
 python-dateutil
+streamlit_lottie
