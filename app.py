@@ -10,6 +10,7 @@ from googleapiclient.discovery import build
 import googleapiclient.errors
 import google.auth.exceptions
 from dateutil.parser import isoparse
+import json
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly', 'https://www.googleapis.com/auth/calendar.events']
 
@@ -56,6 +57,17 @@ def get_existing_events(service, calendar_id='primary', time_min=None, time_max=
         st.error(f"An error occurred while fetching events: {error}")
         return []
 
+def get_event_history():
+    if os.path.exists('event_history.json'):
+        with open('event_history.json', 'r') as file:
+            return json.load(file)
+    else:
+        return {'created_events': [], 'completed_events': []}
+
+def save_event_history(history):
+    with open('event_history.json', 'w') as file:
+        json.dump(history, file)
+
 def main():
     creds = get_credentials()
 
@@ -70,6 +82,19 @@ def main():
         return
 
     st.title('Google Calendar Event Scheduler')
+
+    history = get_event_history()
+
+    # Progress tracker
+    total_events = len(history['created_events'])
+    completed_events = len(history['completed_events'])
+    progress_percentage = (completed_events / total_events) * 100 if total_events > 0 else 0
+    streak_counter = calculate_streak(history['completed_events'])
+
+    st.sidebar.title('Progress Tracker')
+    st.sidebar.progress(progress_percentage)
+    st.sidebar.write(f"Completed: {completed_events}/{total_events} events")
+    st.sidebar.write(f"Current streak: {streak_counter} days")
 
     # Date picker for existing events preview
     selected_date = st.sidebar.date_input("Select a date to view existing events:")
@@ -91,10 +116,10 @@ def main():
             st.markdown(
                 f"""
                 <div style="background-color:#{color_id}; padding: 10px; margin-bottom: 10px;">
-                **Name:** {event_summary}<br>
-                **Date:** {event_start.strftime('%Y-%m-%d')}<br>
-                **Duration:** {event_start.strftime('%H:%M')} to {event_end.strftime('%H:%M')}<br>
-                **Description:** {event_description}
+                Name: {event_summary}<br>
+                Date: {event_start.strftime('%Y-%m-%d')}<br>
+                Duration: {event_start.strftime('%H:%M')} to {event_end.strftime('%H:%M')}<br>
+                Description: {event_description}
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -140,7 +165,6 @@ def main():
         sri_lanka_tz = pytz.timezone('Asia/Colombo')
         event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
         success = True
-        history = []
 
         for interval in intervals:
             action = interval_actions[interval]
@@ -169,7 +193,8 @@ def main():
 
             try:
                 created_event = service.events().insert(calendarId='primary', body=event_body).execute()
-                history.append(f"Event created for interval {interval} days")
+                history['created_events'].append(created_event['id'])
+                save_event_history(history)
             except googleapiclient.errors.HttpError as error:
                 st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
                 success = False
@@ -178,6 +203,18 @@ def main():
         if success:
             st.success('All events created successfully!')
             st.balloons()
+
+def calculate_streak(completed_events):
+    if not completed_events:
+        return 0
+    completed_dates = sorted([isoparse(event['date']).date() for event in completed_events])
+    streak = 1
+    for i in range(1, len(completed_dates)):
+        if (completed_dates[i] - completed_dates[i - 1]).days == 1:
+            streak += 1
+        else:
+            streak = 1
+    return streak
 
 # Run the app
 if __name__ == '__main__':
