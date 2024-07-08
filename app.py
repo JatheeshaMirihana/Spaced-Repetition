@@ -10,6 +10,8 @@ from googleapiclient.discovery import build
 import googleapiclient.errors
 import google.auth.exceptions
 from dateutil.parser import isoparse
+from streamlit_lottie import st_lottie
+import requests
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly', 'https://www.googleapis.com/auth/calendar.events']
 
@@ -56,6 +58,12 @@ def get_existing_events(service, calendar_id='primary', time_min=None, time_max=
         st.error(f"An error occurred while fetching events: {error}")
         return []
 
+def load_lottieurl(url: str):
+    r = requests.get(url)
+    if r.status_code != 200:
+        return None
+    return r.json()
+
 def main():
     creds = get_credentials()
 
@@ -91,10 +99,10 @@ def main():
             st.markdown(
                 f"""
                 <div style="background-color:#{color_id}; padding: 10px; margin-bottom: 10px;">
-                **Name:** {event_summary}<br>
-                **Date:** {event_start.strftime('%Y-%m-%d')}<br>
-                **Duration:** {event_start.strftime('%H:%M')} to {event_end.strftime('%H:%M')}<br>
-                **Description:** {event_description}
+                Name: {event_summary}<br>
+                Date: {event_start.strftime('%Y-%m-%d')}<br>
+                Duration: {event_start.strftime('%H:%M')} to {event_end.strftime('%H:%M')}<br>
+                Description: {event_description}
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -135,6 +143,9 @@ def main():
         365: "Final review"
     }
 
+    lottie_url = "https://lottie.host/ab707bf3-1b79-4cc5-ad5a-32462f3e1f4b/aN1gH1BplS.json"  # Your Lottie URL
+    lottie_animation = load_lottieurl(lottie_url)  # Load your Lottie JSON from URL
+
     if st.button("Schedule Events"):
         event_datetime = datetime.datetime.combine(event_date, event_time)
         sri_lanka_tz = pytz.timezone('Asia/Colombo')
@@ -169,7 +180,7 @@ def main():
 
             try:
                 created_event = service.events().insert(calendarId='primary', body=event_body).execute()
-                st.balloons()  # Animation for event creation
+                st_lottie(lottie_animation)  # Display Lottie animation for event creation
                 history.append(f"Event created for interval {interval} days")
             except googleapiclient.errors.HttpError as error:
                 st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
