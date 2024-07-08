@@ -95,20 +95,15 @@ def main():
     # Display progress tracker on the right sidebar
     with st.sidebar.container():
         st.sidebar.title('Progress Tracker')
-        st.sidebar.markdown(
-            f"""
-            <div style="background-color: lightgreen; padding: 10px; margin-bottom: 10px;">
-                <div style="width: 100%; background-color: #ddd;">
-                    <div style="width: {progress_percentage}%; height: 30px; background-color: lightgreen;"></div>
-                </div>
-                <p>{progress_percentage:.2f}% completed</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        st.sidebar.progress(progress_percentage)
         st.sidebar.write(f"Completed: {completed_events}/{total_events} events")
         st.sidebar.write(f"Current streak: {streak_counter} days")
         st.sidebar.write(f"Missed events: {missed_events}")
+        if st.button("Reset Progress"):
+            history['completed_events'] = []
+            history['missed_events'] = []
+            save_event_history(history)
+            st.experimental_rerun()  # Refresh the app to show the updated progress
 
     # Date picker for existing events preview
     selected_date = st.sidebar.date_input("Select a date to view existing events:")
@@ -156,6 +151,27 @@ def main():
                     save_event_history(history)
                     st.success(f"Event marked as done.")
                     st.experimental_rerun()  # Refresh the app to show the updated event list
+                if st.button(f"Incomplete", key=f"incomplete_{event['id']}"):
+                    try:
+                        new_event = service.events().insert(calendarId='primary', body={
+                            'summary': event_summary,
+                            'description': event_description,
+                            'start': {
+                                'dateTime': (datetime.datetime.now() + datetime.timedelta(days=1)).isoformat(),
+                                'timeZone': 'Asia/Colombo',
+                            },
+                            'end': {
+                                'dateTime': (datetime.datetime.now() + datetime.timedelta(days=1, minutes=30)).isoformat(),
+                                'timeZone': 'Asia/Colombo',
+                            },
+                            'colorId': get_color_id(event_summary.split(':')[0]),
+                        }).execute()
+                        history['missed_events'].append({'id': event['id'], 'date': datetime.datetime.now().isoformat()})
+                        save_event_history(history)
+                        st.success(f"New event created for incomplete event.")
+                        st.experimental_rerun()  # Refresh the app to show the updated event list
+                    except googleapiclient.errors.HttpError as error:
+                        st.error(f"An error occurred while creating a new event for incomplete event {event['id']}: {error}")
 
     # Get event details from the user using Streamlit widgets
     event_date = st.date_input("Enter the date you first studied the topic:")
@@ -185,6 +201,7 @@ def main():
         sri_lanka_tz = pytz.timezone('Asia/Colombo')
         event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
         success = True
+        history = get_event_history()
 
         for interval in intervals:
             action = interval_actions[interval]
