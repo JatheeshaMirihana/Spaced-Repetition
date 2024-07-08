@@ -151,7 +151,8 @@ def main():
 
     if st.button("Schedule Events"):
         event_datetime = datetime.datetime.combine(event_date, event_time)
-        event_datetime_sri_lanka = convert_to_sri_lanka_time(event_datetime)
+        sri_lanka_tz = pytz.timezone('Asia/Colombo')
+        event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
         success = True
         new_conflicts = False
         history = []
@@ -186,7 +187,7 @@ def main():
 
                 try:
                     created_event = service.events().insert(calendarId='primary', body=event_body).execute()
-                    history.append(f"Event created for interval {interval} days: {created_event.get('htmlLink')}")
+                    history.append(f"Event created for interval {interval} days")
                 except googleapiclient.errors.HttpError as error:
                     st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
                     success = False
@@ -194,8 +195,6 @@ def main():
 
         if success:
             st.success('All events created successfully!')
-            for h in history:
-                st.write(h)
         elif new_conflicts:
             st.warning("Some events could not be created due to conflicts. Please review and resolve them.")
         else:
