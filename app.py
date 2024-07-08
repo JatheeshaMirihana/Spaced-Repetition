@@ -139,8 +139,13 @@ def main():
     event_date = st.date_input("Enter the date you first studied the topic:")
     event_time = st.time_input("Enter the time you first studied the topic:")
     study_duration = st.number_input("Enter the duration of your study session (in minutes):", min_value=1)
-    event_subject = st.text_input("Enter the subject of the event:")
-    event_description = st.text_input("Enter the description of the event:")
+    
+    # Dropdown for subjects
+    subjects = ['Physics', 'Chemistry', 'Combined Maths']
+    event_subject = st.selectbox("Select the subject of the event:", subjects)
+    
+    # Text area for description
+    event_description = st.text_area("Enter the description of the event:")
 
     intervals = [1, 7, 14, 28]  # Days to repeat the event
 
