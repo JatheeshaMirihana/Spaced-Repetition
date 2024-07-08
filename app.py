@@ -237,9 +237,9 @@ def main():
                 success = False
                 break
 
-    if success:
-        st.success('All events created successfully!')
-        st.balloons()
+        if success:
+            st.success('All events created successfully!')
+            st.balloons()
 def calculate_streak(completed_events):
     streak = 0
     today = datetime.datetime.now().date()
