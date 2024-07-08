@@ -62,7 +62,7 @@ def get_event_history():
         with open('event_history.json', 'r') as file:
             return json.load(file)
     else:
-        return {'created_events': [], 'completed_events': []}
+        return {'created_events': [], 'completed_events': [], 'missed_events': []}
 
 def save_event_history(history):
     with open('event_history.json', 'w') as file:
@@ -88,13 +88,17 @@ def main():
     # Progress tracker
     total_events = len(history['created_events'])
     completed_events = len(history['completed_events'])
+    missed_events = len(history['missed_events'])
     progress_percentage = (completed_events / total_events) * 100 if total_events > 0 else 0
     streak_counter = calculate_streak(history['completed_events'])
 
-    st.sidebar.title('Progress Tracker')
-    st.sidebar.progress(progress_percentage)
-    st.sidebar.write(f"Completed: {completed_events}/{total_events} events")
-    st.sidebar.write(f"Current streak: {streak_counter} days")
+    # Display progress tracker on the right sidebar
+    with st.sidebar.container():
+        st.sidebar.title('Progress Tracker')
+        st.sidebar.progress(progress_percentage, text_color='lightgreen')
+        st.sidebar.write(f"Completed: {completed_events}/{total_events} events")
+        st.sidebar.write(f"Current streak: {streak_counter} days")
+        st.sidebar.write(f"Missed events: {missed_events}")
 
     # Date picker for existing events preview
     selected_date = st.sidebar.date_input("Select a date to view existing events:")
@@ -104,7 +108,7 @@ def main():
     time_max = datetime.datetime.combine(selected_date, datetime.time.max).isoformat() + 'Z'
     existing_events = get_existing_events(service, time_min=time_min, time_max=time_max)
 
-    # Display existing events with edit/delete options in modern UI
+    # Display existing events with edit/delete/mark as done options in the sidebar
     st.sidebar.title('Existing Events')
     for event in existing_events:
         event_start = isoparse(event['start']['dateTime'])
@@ -124,7 +128,7 @@ def main():
                 """,
                 unsafe_allow_html=True
             )
-            col1, col2 = st.columns([1, 1])
+            col1, col2, col3 = st.columns([1, 1, 1])
             with col1:
                 if st.button(f"Edit", key=f"edit_{event['id']}"):
                     st.warning("Edit functionality not implemented yet.")
@@ -136,6 +140,12 @@ def main():
                         st.experimental_rerun()  # Refresh the app to show the updated event list
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while deleting event {event['id']}: {error}")
+            with col3:
+                if st.button(f"Done", key=f"done_{event['id']}"):
+                    history['completed_events'].append({'id': event['id'], 'date': datetime.datetime.now().isoformat()})
+                    save_event_history(history)
+                    st.success(f"Event marked as done.")
+                    st.experimental_rerun()  # Refresh the app to show the updated event list
 
     # Get event details from the user using Streamlit widgets
     event_date = st.date_input("Enter the date you first studied the topic:")
@@ -193,7 +203,7 @@ def main():
 
             try:
                 created_event = service.events().insert(calendarId='primary', body=event_body).execute()
-                history['created_events'].append(created_event['id'])
+                history['created_events'].append({'id': created_event['id'], 'date': event_datetime_interval.isoformat()})
                 save_event_history(history)
             except googleapiclient.errors.HttpError as error:
                 st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
@@ -205,15 +215,14 @@ def main():
             st.balloons()
 
 def calculate_streak(completed_events):
-    if not completed_events:
-        return 0
-    completed_dates = sorted([isoparse(event['date']).date() for event in completed_events])
-    streak = 1
-    for i in range(1, len(completed_dates)):
-        if (completed_dates[i] - completed_dates[i - 1]).days == 1:
+    streak = 0
+    today = datetime.datetime.now().date()
+    for event in sorted(completed_events, key=lambda x: x['date'], reverse=True):
+        event_date = isoparse(event['date']).date()
+        if (today - event_date).days == streak:
             streak += 1
         else:
-            streak = 1
+            break
     return streak
 
 # Run the app
