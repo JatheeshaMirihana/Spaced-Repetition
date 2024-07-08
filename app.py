@@ -110,15 +110,15 @@ def main():
     # Text area for description
     event_description = st.text_area("Enter the description of the event:")
 
-    intervals = [1, 3, 7, 14, 30, 60, 90]  # Days to repeat the event
+    intervals = [1, 7, 16, 35, 90, 180, 365]  # Updated intervals
     interval_actions = {
         1: "Review notes",
-        3: "Revise thoroughly",
-        7: "Solve problems",
-        14: "Revise again",
-        30: "Test yourself",
-        60: "Deep review",
-        90: "Final review"
+        7: "Revise thoroughly",
+        16: "Solve problems",
+        35: "Revise again",
+        90: "Test yourself",
+        180: "Deep review",
+        365: "Final review"
     }
 
     if st.button("Schedule Events"):
@@ -157,11 +157,6 @@ def main():
 
         if success:
             st.success('All events created successfully!')
-
-    # Embed Google Calendar iframe
-    st.markdown("### View your Google Calendar")
-    google_calendar_url = "https://calendar.google.com/calendar/embed?src=primary"
-    st.components.v1.iframe(google_calendar_url, width=800, height=600)
 
 # Run the app
 if __name__ == '__main__':
