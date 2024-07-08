@@ -10,8 +10,6 @@ from googleapiclient.discovery import build
 import googleapiclient.errors
 import google.auth.exceptions
 from dateutil.parser import isoparse
-from streamlit_lottie import st_lottie
-import requests
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly', 'https://www.googleapis.com/auth/calendar.events']
 
@@ -57,37 +55,6 @@ def get_existing_events(service, calendar_id='primary', time_min=None, time_max=
     except googleapiclient.errors.HttpError as error:
         st.error(f"An error occurred while fetching events: {error}")
         return []
-
-def load_lottieurl(url: str):
-    r = requests.get(url)
-    if r.status_code != 200:
-        return None
-    return r.json()
-
-def display_lottie_animation(lottie_json):
-    st.markdown(
-        """
-        <div id="lottie-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(255, 255, 255, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000;">
-            <div id="lottie-container"></div>
-        </div>
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/bodymovin/5.7.5/lottie.min.js"></script>
-        <script>
-            const lottieContainer = document.getElementById('lottie-container');
-            const animationData = {json_data};
-            lottie.loadAnimation({
-                container: lottieContainer,
-                animationData: animationData,
-                renderer: 'svg',
-                loop: false,
-                autoplay: true,
-            });
-            setTimeout(() => {{
-                document.getElementById('lottie-overlay').style.display = 'none';
-            }}, 2000);
-        </script>
-        """.replace("{json_data}", str(lottie_json)),
-        unsafe_allow_html=True,
-    )
 
 def main():
     creds = get_credentials()
@@ -168,9 +135,6 @@ def main():
         365: "Final review"
     }
 
-    lottie_url = "https://assets3.lottiefiles.com/packages/lf20_hxkh1uqj.json"  # Your Lottie URL
-    lottie_animation = load_lottieurl(lottie_url)  # Load your Lottie JSON from URL
-
     if st.button("Schedule Events"):
         event_datetime = datetime.datetime.combine(event_date, event_time)
         sri_lanka_tz = pytz.timezone('Asia/Colombo')
@@ -213,8 +177,7 @@ def main():
 
         if success:
             st.success('All events created successfully!')
-            if lottie_animation:
-                display_lottie_animation(lottie_animation)
+            st.balloons()
 
 # Run the app
 if __name__ == '__main__':
