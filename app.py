@@ -85,18 +85,32 @@ def main():
         event_start = isoparse(event['start']['dateTime'])
         event_end = isoparse(event['end']['dateTime'])
         event_summary = event.get('summary', 'No Summary')
-        st.sidebar.write(f"**{event_summary}**: {event_start} - {event_end}")
-        col1, col2 = st.sidebar.columns([1, 1])
-        with col1:
-            if st.button(f"Edit", key=f"edit_{event['id']}"):
-                st.sidebar.warning("Edit functionality not implemented yet.")
-        with col2:
-            if st.button(f"Delete", key=f"delete_{event['id']}"):
-                try:
-                    service.events().delete(calendarId='primary', eventId=event['id']).execute()
-                    st.sidebar.success(f"Event deleted successfully.")
-                except googleapiclient.errors.HttpError as error:
-                    st.sidebar.error(f"An error occurred while deleting event {event['id']}: {error}")
+        event_description = event.get('description', 'No Description')
+        color_id = get_color_id(event_summary.split(':')[0])
+        with st.sidebar.container():
+            st.markdown(
+                f"""
+                <div style="background-color:#{color_id}; padding: 10px; margin-bottom: 10px;">
+                **Name:** {event_summary}<br>
+                **Date:** {event_start.strftime('%Y-%m-%d')}<br>
+                **Duration:** {event_start.strftime('%H:%M')} to {event_end.strftime('%H:%M')}<br>
+                **Description:** {event_description}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            col1, col2 = st.columns([1, 1])
+            with col1:
+                if st.button(f"Edit", key=f"edit_{event['id']}"):
+                    st.warning("Edit functionality not implemented yet.")
+            with col2:
+                if st.button(f"Delete", key=f"delete_{event['id']}"):
+                    try:
+                        service.events().delete(calendarId='primary', eventId=event['id']).execute()
+                        st.success(f"Event deleted successfully.")
+                        st.experimental_rerun()  # Refresh the app to show the updated event list
+                    except googleapiclient.errors.HttpError as error:
+                        st.error(f"An error occurred while deleting event {event['id']}: {error}")
 
     # Get event details from the user using Streamlit widgets
     event_date = st.date_input("Enter the date you first studied the topic:")
@@ -133,6 +147,12 @@ def main():
             event_title = f"{event_subject}: {action}"
             event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
             event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
+            
+            # Check if the final event exceeds August 2025 and adjust if necessary
+            if interval == 365 and event_datetime_interval > datetime.datetime(2025, 8, 31, tzinfo=sri_lanka_tz):
+                event_datetime_interval = datetime.datetime(2025, 8, 31, 23, 59, tzinfo=sri_lanka_tz)
+                event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
+
             event_body = {
                 'summary': event_title,
                 'description': event_description,
@@ -149,6 +169,7 @@ def main():
 
             try:
                 created_event = service.events().insert(calendarId='primary', body=event_body).execute()
+                st.balloons()  # Animation for event creation
                 history.append(f"Event created for interval {interval} days")
             except googleapiclient.errors.HttpError as error:
                 st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
