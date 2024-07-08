@@ -95,7 +95,7 @@ def main():
     # Display progress tracker on the right sidebar
     with st.sidebar.container():
         st.sidebar.title('Progress Tracker')
-        st.sidebar.progress(progress_percentage)
+        st.sidebar.progress(progress_percentage / 100)
         st.sidebar.write(f"Completed: {completed_events}/{total_events} events")
         st.sidebar.write(f"Current streak: {streak_counter} days")
         st.sidebar.write(f"Missed events: {missed_events}")
@@ -202,14 +202,14 @@ def main():
         event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
         success = True
         history = get_event_history()
-
+    
         for interval in intervals:
             action = interval_actions[interval]
             event_title = f"{event_subject}: {action}"
             event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
             event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
-            
-            # Check if the final event exceeds August 2025 and adjust if necessary
+        
+        # Check if the final event exceeds August 2025 and adjust if necessary
             if interval == 365 and event_datetime_interval > datetime.datetime(2025, 8, 31, tzinfo=sri_lanka_tz):
                 event_datetime_interval = datetime.datetime(2025, 8, 31, 23, 59, tzinfo=sri_lanka_tz)
                 event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
@@ -219,14 +219,14 @@ def main():
                 'description': event_description,
                 'start': {
                     'dateTime': event_datetime_interval.isoformat(),
-                    'timeZone': 'Asia/Colombo',
+                        'timeZone': 'Asia/Colombo',
                 },
                 'end': {
                     'dateTime': event_end_interval.isoformat(),
                     'timeZone': 'Asia/Colombo',
                 },
                 'colorId': get_color_id(event_subject),
-            }
+        }
 
             try:
                 created_event = service.events().insert(calendarId='primary', body=event_body).execute()
@@ -237,10 +237,9 @@ def main():
                 success = False
                 break
 
-        if success:
-            st.success('All events created successfully!')
-            st.balloons()
-
+    if success:
+        st.success('All events created successfully!')
+        st.balloons()
 def calculate_streak(completed_events):
     streak = 0
     today = datetime.datetime.now().date()
