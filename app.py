@@ -56,44 +56,7 @@ def get_existing_events(service, calendar_id='primary', time_min=None, time_max=
         st.error(f"An error occurred while fetching events: {error}")
         return []
 
-def check_conflicts(new_event_start, new_event_end, existing_events):
-    for event in existing_events:
-        existing_start = isoparse(event['start']['dateTime'])
-        existing_end = isoparse(event['end']['dateTime'])
-        if new_event_start < existing_end and new_event_end > existing_start:
-            return event
-    return None
-
-def suggest_free_times(existing_events, duration, event_datetime_sri_lanka, num_suggestions=4):
-    free_times = []
-    day_start = event_datetime_sri_lanka.replace(hour=0, minute=0, second=0, microsecond=0)
-    day_end = day_start + datetime.timedelta(days=1)
-    
-    current_time = day_start
-    while current_time + datetime.timedelta(minutes=duration) <= day_end:
-        conflict = False
-        for event in existing_events:
-            event_start = isoparse(event['start']['dateTime'])
-            event_end = isoparse(event['end']['dateTime'])
-            if current_time < event_end and (current_time + datetime.timedelta(minutes=duration)) > event_start:
-                conflict = True
-                current_time = event_end
-                break
-        if not conflict:
-            free_times.append(current_time)
-            if len(free_times) >= num_suggestions:
-                break
-            current_time += datetime.timedelta(minutes=duration)
-        else:
-            current_time += datetime.timedelta(minutes=15)  # Move in 15-minute increments
-    return free_times
-
 def main():
-    if "conflicts" not in st.session_state:
-        st.session_state.conflicts = {}
-    if "free_times" not in st.session_state:
-        st.session_state.free_times = {}
-
     creds = get_credentials()
 
     if not creds:
@@ -147,58 +110,58 @@ def main():
     # Text area for description
     event_description = st.text_area("Enter the description of the event:")
 
-    intervals = [1, 7, 14, 28]  # Days to repeat the event
+    intervals = [1, 3, 7, 14, 30, 60, 90]  # Days to repeat the event
+    interval_actions = {
+        1: "Review notes",
+        3: "Revise thoroughly",
+        7: "Solve problems",
+        14: "Revise again",
+        30: "Test yourself",
+        60: "Deep review",
+        90: "Final review"
+    }
 
     if st.button("Schedule Events"):
         event_datetime = datetime.datetime.combine(event_date, event_time)
         sri_lanka_tz = pytz.timezone('Asia/Colombo')
         event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
         success = True
-        new_conflicts = False
         history = []
 
         for interval in intervals:
+            action = interval_actions[interval]
+            event_title = f"{event_subject}: {action}"
             event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
             event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
-            conflicting_event = check_conflicts(event_datetime_interval, event_end_interval, existing_events)
-            
-            if conflicting_event:
-                st.session_state.conflicts[interval] = f"Conflict with event {conflicting_event.get('summary', 'No Summary')} from {conflicting_event['start']['dateTime']} to {conflicting_event['end']['dateTime']}"
-                st.warning(st.session_state.conflicts[interval])
-                free_times = suggest_free_times(existing_events, study_duration, event_datetime_interval)
-                st.session_state.free_times[interval] = free_times
-                new_conflicts = True
-            else:
-                st.session_state.conflicts.pop(interval, None)
-                st.session_state.free_times.pop(interval, None)
-                event_body = {
-                    'summary': event_subject,
-                    'description': event_description,
-                    'start': {
-                        'dateTime': event_datetime_interval.isoformat(),
-                        'timeZone': 'Asia/Colombo',
-                    },
-                    'end': {
-                        'dateTime': event_end_interval.isoformat(),
-                        'timeZone': 'Asia/Colombo',
-                    },
-                    'colorId': get_color_id(event_subject),
-                }
+            event_body = {
+                'summary': event_title,
+                'description': event_description,
+                'start': {
+                    'dateTime': event_datetime_interval.isoformat(),
+                    'timeZone': 'Asia/Colombo',
+                },
+                'end': {
+                    'dateTime': event_end_interval.isoformat(),
+                    'timeZone': 'Asia/Colombo',
+                },
+                'colorId': get_color_id(event_subject),
+            }
 
-                try:
-                    created_event = service.events().insert(calendarId='primary', body=event_body).execute()
-                    history.append(f"Event created for interval {interval} days")
-                except googleapiclient.errors.HttpError as error:
-                    st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
-                    success = False
-                    break
+            try:
+                created_event = service.events().insert(calendarId='primary', body=event_body).execute()
+                history.append(f"Event created for interval {interval} days")
+            except googleapiclient.errors.HttpError as error:
+                st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
+                success = False
+                break
 
         if success:
             st.success('All events created successfully!')
-        elif new_conflicts:
-            st.warning("Some events could not be created due to conflicts. Please review and resolve them.")
-        else:
-            st.error("An error occurred while creating events. Please try again.")
+
+    # Embed Google Calendar iframe
+    st.markdown("### View your Google Calendar")
+    google_calendar_url = "https://calendar.google.com/calendar/embed?src=primary"
+    st.components.v1.iframe(google_calendar_url, width=800, height=600)
 
 # Run the app
 if __name__ == '__main__':
