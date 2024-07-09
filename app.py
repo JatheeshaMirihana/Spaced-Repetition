@@ -88,22 +88,33 @@ def main():
     # Right Sidebar for Progress Tracker
     st.sidebar.title('Your Progress')
 
+    if 'event_checkboxes' not in st.session_state:
+        st.session_state.event_checkboxes = {}
+
+    def toggle_completion(event_id, sub_event_id):
+        for event in history['created_events']:
+            if event['id'] == event_id:
+                for sub_event in event['sub_events']:
+                    if sub_event['id'] == sub_event_id:
+                        sub_event['completed'] = not sub_event['completed']
+                        save_event_history(history)
+                        st.experimental_rerun()
+                        return
+
     for event in history['created_events']:
         event_id = event['id']
         event_title = event['title']
         if len(event_title) > 20:
             event_title = event_title[:17] + "..."
         with st.sidebar.expander(f"{event_title}"):
-            for interval_event in event['sub_events']:
-                is_completed = interval_event['completed']
-                event_name = interval_event['name']
+            for sub_event in event['sub_events']:
+                sub_event_id = sub_event['id']
+                is_completed = sub_event['completed']
+                event_name = sub_event['name']
                 if is_completed:
                     event_name = f"~~{event_name}~~"
-                if st.checkbox(event_name, value=is_completed, key=f"cb_{interval_event['id']}"):
-                    interval_event['completed'] = True
-                else:
-                    interval_event['completed'] = False
-            save_event_history(history)
+                if st.checkbox(event_name, value=is_completed, key=f"cb_{sub_event_id}", on_change=toggle_completion, args=(event_id, sub_event_id)):
+                    st.session_state.event_checkboxes[sub_event_id] = not is_completed
 
     # Date picker for existing events preview
     selected_date = st.date_input("Select a date to view existing events:")
@@ -248,6 +259,7 @@ def main():
             save_event_history(history)
             st.success('All events created successfully!')
             st.balloons()
+            st.experimental_rerun()
 
 # Run the app
 if __name__ == '__main__':
