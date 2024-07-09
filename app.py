@@ -149,7 +149,7 @@ def main():
                 event_name = sub_event['name']
                 if is_completed:
                     event_name = f"~~{event_name}~~"
-                st.radio(event_name, [is_completed], key=f"rb_{sub_event_id}", on_change=toggle_completion, args=(event_id, sub_event_id))
+                st.checkbox(event_name, value=is_completed, key=f"cb_{sub_event_id}", on_change=toggle_completion, args=(event_id, sub_event_id))
 
     # Add Reset Progress Button
     st.sidebar.button("Reset Progress", on_click=reset_progress)
@@ -222,6 +222,7 @@ def main():
         event_datetime = datetime.datetime.combine(event_date, event_time)
         sri_lanka_tz = pytz.timezone('Asia/Colombo')
         event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
+        
         success = True
         sub_events = []
 
