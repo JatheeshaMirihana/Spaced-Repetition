@@ -163,8 +163,6 @@ def main():
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while deleting event {event_id}: {error}")
 
-    # Add Reset Progress Button
-    st.sidebar.button("Reset Progress", on_click=reset_progress)
 
     # Date picker for existing events preview
     st.sidebar.title('Existing Events')
@@ -220,14 +218,15 @@ def main():
     event_description = st.text_area("Enter a description for the study session:")
     
     # List of intervals for spaced repetition
-    intervals = [1, 7, 30, 90, 180, 365]
+    intervals = [1, 7, 16, 30, 90, 180, 365]
     interval_actions = {
-        1: 'Review 1 Day Later',
-        7: 'Review 1 Week Later',
-        30: 'Review 1 Month Later',
-        90: 'Review 3 Months Later',
-        180: 'Review 6 Months Later',
-        365: 'Review 1 Year Later'
+        1: 'Review notes',
+        7: 'Revise thoroughly',
+        16: 'Solve problems',
+        35: 'Revise again',
+        90: 'Test yourself',
+        180: 'Deep review',
+        365: 'Final review'
     }
     
     if st.button("Create Events"):
