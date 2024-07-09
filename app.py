@@ -143,19 +143,32 @@ def main():
         if len(event_title) > 20:
             event_title = event_title[:17] + "..."
         with st.sidebar.expander(f"{event_title}"):
-            for sub_event in event['sub_events']:
-                sub_event_id = sub_event['id']
-                is_completed = sub_event['completed']
-                event_name = sub_event['name']
-                if is_completed:
-                    event_name = f"~~{event_name}~~"
-                st.checkbox(event_name, value=is_completed, key=f"cb_{sub_event_id}", on_change=toggle_completion, args=(event_id, sub_event_id))
+            col1, col2 = st.columns([8, 1])
+            with col1:
+                for sub_event in event['sub_events']:
+                    sub_event_id = sub_event['id']
+                    is_completed = sub_event['completed']
+                    event_name = sub_event['name']
+                    if is_completed:
+                        event_name = f"~~{event_name}~~"
+                    st.checkbox(event_name, value=is_completed, key=f"cb_{sub_event_id}", on_change=toggle_completion, args=(event_id, sub_event_id))
+            with col2:
+                if st.button("🗑️", key=f"delete_main_{event_id}"):
+                    try:
+                        for sub_event in event['sub_events']:
+                            service.events().delete(calendarId='primary', eventId=sub_event['id']).execute()
+                        updated_history['created_events'] = [e for e in updated_history['created_events'] if e['id'] != event_id]
+                        save_event_history(updated_history)
+                        st.experimental_rerun()  # Refresh the app to show the updated event list
+                    except googleapiclient.errors.HttpError as error:
+                        st.error(f"An error occurred while deleting event {event_id}: {error}")
 
     # Add Reset Progress Button
     st.sidebar.button("Reset Progress", on_click=reset_progress)
 
     # Date picker for existing events preview
-    selected_date = st.date_input("Select a date to view existing events:")
+    st.sidebar.title('Existing Events')
+    selected_date = st.sidebar.date_input("Select a date to view existing events:")
 
     # Fetch existing events for the selected date
     time_min = datetime.datetime.combine(selected_date, datetime.time.min).isoformat() + 'Z'
@@ -163,7 +176,6 @@ def main():
     existing_events = get_existing_events(service, time_min=time_min, time_max=time_max)
 
     # Display existing events with edit/delete options in the sidebar
-    st.sidebar.title('Existing Events')
     for event in existing_events:
         event_start = isoparse(event['start']['dateTime'])
         event_end = isoparse(event['end']['dateTime'])
@@ -182,7 +194,7 @@ def main():
                 """,
                 unsafe_allow_html=True
             )
-            col1, col2 = st.columns([1, 1])
+            col1, col2 = st.sidebar.columns([1, 1])
             with col1:
                 if st.button(f"Edit", key=f"edit_{event['id']}"):
                     st.warning("Edit functionality not implemented yet.")
@@ -202,23 +214,23 @@ def main():
     
     # Dropdown for subjects
     subjects = ['Physics', 'Chemistry', 'Combined Maths']
-    event_subject = st.selectbox("Select the subject of the event:", subjects)
+    event_subject = st.selectbox("Select your subject:", subjects)
     
-    # Text area for description
-    event_description = st.text_area("Enter the description of the event:")
-
-    intervals = [1, 7, 16, 35, 90, 180, 365]  # Updated intervals
+    # Text area for event description
+    event_description = st.text_area("Enter a description for the study session:")
+    
+    # List of intervals for spaced repetition
+    intervals = [1, 7, 30, 90, 180, 365]
     interval_actions = {
-        1: "Review notes",
-        7: "Revise thoroughly",
-        16: "Solve problems",
-        35: "Revise again",
-        90: "Test yourself",
-        180: "Deep review",
-        365: "Final review"
+        1: 'Review 1 Day Later',
+        7: 'Review 1 Week Later',
+        30: 'Review 1 Month Later',
+        90: 'Review 3 Months Later',
+        180: 'Review 6 Months Later',
+        365: 'Review 1 Year Later'
     }
-
-    if st.button("Schedule Events"):
+    
+    if st.button("Create Events"):
         event_datetime = datetime.datetime.combine(event_date, event_time)
         sri_lanka_tz = pytz.timezone('Asia/Colombo')
         event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
