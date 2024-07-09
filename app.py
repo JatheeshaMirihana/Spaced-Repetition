@@ -223,7 +223,7 @@ def main():
         1: 'Review notes',
         7: 'Revise thoroughly',
         16: 'Solve problems',
-        35: 'Revise again',
+        30: 'Revise again',
         90: 'Test yourself',
         180: 'Deep review',
         365: 'Final review'
