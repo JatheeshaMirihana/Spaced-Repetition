@@ -133,6 +133,24 @@ def main():
                 for sub_event in event['sub_events']:
                     if sub_event['id'] == sub_event_id:
                         sub_event['completed'] = not sub_event['completed']
+                        
+                        # Update the event title and color on Google Calendar
+                        try:
+                            # Fetch the existing event details
+                            existing_event = service.events().get(calendarId='primary', eventId=sub_event['id']).execute()
+                            
+                            # Update the title and color based on completion status
+                            updated_event = {
+                                'summary': f"Completed: {existing_event['summary']}" if sub_event['completed'] else existing_event['summary'].replace("Completed: ", ""),
+                                'colorId': '8' if sub_event['completed'] else existing_event.get('colorId', '1'),  # Graphite if completed, otherwise default or previous color
+                            }
+                            
+                            # Update the event on Google Calendar
+                            service.events().patch(calendarId='primary', eventId=sub_event['id'], body=updated_event).execute()
+                            
+                        except googleapiclient.errors.HttpError as error:
+                            st.error(f"An error occurred while updating the event {sub_event_id}: {error}")
+                        
                         save_event_history(updated_history)
                         st.experimental_rerun()
                         return
@@ -200,89 +218,99 @@ def main():
                 if st.button(f"Delete", key=f"delete_{event['id']}"):
                     try:
                         service.events().delete(calendarId='primary', eventId=event['id']).execute()
-                        st.success(f"Event deleted successfully.")
-                        st.experimental_rerun()  # Refresh the app to show the updated event list
+                        st.experimental_rerun()
                     except googleapiclient.errors.HttpError as error:
-                        st.error(f"An error occurred while deleting event {event['id']}: {error}")
+                        st.error(f"An error occurred while deleting the event: {error}")
 
-    # Get event details from the user using Streamlit widgets
-    event_date = st.date_input("Enter the date you first studied the topic:")
-    event_time = st.time_input("Enter the time you first studied the topic:")
-    study_duration = st.number_input("Enter the duration of your study session (in minutes):", min_value=1)
-    
-    # Dropdown for subjects
-    subjects = ['Physics', 'Chemistry', 'Combined Maths']
-    event_subject = st.selectbox("Select your subject:", subjects)
-    
-    # Text area for event description
-    event_description = st.text_area("Enter a description for the study session:")
-    
-    # List of intervals for spaced repetition
-    intervals = [1, 7, 16, 30, 90, 180, 365]
-    interval_actions = {
-        1: 'Review notes',
-        7: 'Revise thoroughly',
-        16: 'Solve problems',
-        30: 'Revise again',
-        90: 'Test yourself',
-        180: 'Deep review',
-        365: 'Final review'
-    }
-    
-    if st.button("Create Events"):
-        event_datetime = datetime.datetime.combine(event_date, event_time)
-        sri_lanka_tz = pytz.timezone('Asia/Colombo')
-        event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
-        
-        success = True
-        sub_events = []
+    st.sidebar.button("Reset Progress", on_click=reset_progress)
 
-        for interval in intervals:
-            action = interval_actions[interval]
-            event_title = f"{event_subject}: {action}"
-            event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
-            event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
-        
-            # Check if the final event exceeds August 2025 and adjust if necessary
-            if interval == 365 and event_datetime_interval > datetime.datetime(2025, 8, 31, tzinfo=sri_lanka_tz):
-                event_datetime_interval = datetime.datetime(2025, 8, 31, 23, 59, tzinfo=sri_lanka_tz)
-                event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
+    # Main Page for Event Creation
+    st.header('Create a New Event')
 
-            event_body = {
-                'summary': event_title,
-                'description': event_description,
+    title = st.text_input('Event Title')
+    date = st.date_input('Event Date')
+    start_time = st.time_input('Start Time')
+    end_time = st.time_input('End Time')
+    description = st.text_area('Description')
+    location = st.text_input('Location')
+    subject = st.selectbox('Subject', ['Physics', 'Chemistry', 'Combined Maths', 'Other'])
+    sub_events_count = st.number_input('Number of sub-events', min_value=1, step=1, value=1)
+
+    sub_events = []
+    for i in range(sub_events_count):
+        sub_event_title = st.text_input(f'Sub-event {i + 1} Title')
+        sub_event_duration = st.number_input(f'Sub-event {i + 1} Duration (minutes)', min_value=1, step=1, value=30)
+        sub_events.append({
+            'title': sub_event_title,
+            'duration': sub_event_duration,
+        })
+
+    if st.button('Create Event'):
+        try:
+            sri_lanka_tz = pytz.timezone('Asia/Colombo')
+            start_datetime = sri_lanka_tz.localize(datetime.datetime.combine(date, start_time))
+            end_datetime = sri_lanka_tz.localize(datetime.datetime.combine(date, end_time))
+
+            event_data = {
+                'summary': title,
+                'location': location,
+                'description': description,
                 'start': {
-                    'dateTime': event_datetime_interval.isoformat(),
+                    'dateTime': start_datetime.isoformat(),
                     'timeZone': 'Asia/Colombo',
                 },
                 'end': {
-                    'dateTime': event_end_interval.isoformat(),
+                    'dateTime': end_datetime.isoformat(),
                     'timeZone': 'Asia/Colombo',
                 },
-                'colorId': get_color_id(event_subject),
+                'colorId': get_color_id(subject),
             }
 
-            try:
-                created_event = service.events().insert(calendarId='primary', body=event_body).execute()
-                sub_events.append({'id': created_event['id'], 'name': event_title, 'completed': False})
-            except googleapiclient.errors.HttpError as error:
-                st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
-                success = False
-                break
+            main_event = service.events().insert(calendarId='primary', body=event_data).execute()
+            main_event_id = main_event['id']
 
-        if success:
-            main_event = {
-                'id': created_event['id'],
-                'date': event_datetime_sri_lanka.isoformat(),
-                'title': event_description,
-                'sub_events': sub_events
-            }
-            updated_history['created_events'].append(main_event)
-            save_event_history(updated_history)
-            st.success('All events created successfully!')
-            st.balloons()
-            st.experimental_rerun()
+            event_history = get_event_history()
 
-# Run the app
+            created_sub_events = []
+            current_start = start_datetime
+
+            for sub_event in sub_events:
+                sub_event_end = current_start + datetime.timedelta(minutes=sub_event['duration'])
+                sub_event_data = {
+                    'summary': f"{subject}: {sub_event['title']}",
+                    'location': location,
+                    'description': description,
+                    'start': {
+                        'dateTime': current_start.isoformat(),
+                        'timeZone': 'Asia/Colombo',
+                    },
+                    'end': {
+                        'dateTime': sub_event_end.isoformat(),
+                        'timeZone': 'Asia/Colombo',
+                    },
+                    'colorId': get_color_id(subject),
+                }
+
+                created_sub_event = service.events().insert(calendarId='primary', body=sub_event_data).execute()
+                created_sub_events.append({
+                    'id': created_sub_event['id'],
+                    'name': sub_event['title'],
+                    'completed': False,
+                })
+
+                current_start = sub_event_end
+
+            event_history['created_events'].append({
+                'id': main_event_id,
+                'title': title,
+                'sub_events': created_sub_events,
+            })
+
+            save_event_history(event_history)
+            st.success('Event created successfully!')
+
+        except googleapiclient.errors.HttpError as error:
+            st.error(f"An error occurred: {error}")
+
 if __name__ == '__main__':
     main()
