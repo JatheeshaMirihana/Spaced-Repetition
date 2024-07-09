@@ -110,12 +110,14 @@ def toggle_completion(service, event_id, sub_event_id):
                     # Update Google Calendar event
                     try:
                         calendar_event = service.events().get(calendarId='primary', eventId=sub_event_id).execute()
+                        if 'originalColorId' not in sub_event:
+                            sub_event['originalColorId'] = calendar_event.get('colorId', '1')
                         if sub_event['completed']:
                             calendar_event['summary'] = f"Completed: {calendar_event['summary']}"
                             calendar_event['colorId'] = '8'  # Graphite
                         else:
                             calendar_event['summary'] = calendar_event['summary'].replace("Completed: ", "")
-                            calendar_event['colorId'] = get_color_id(event['title'])
+                            calendar_event['colorId'] = sub_event['originalColorId']
                         service.events().update(calendarId='primary', eventId=sub_event_id, body=calendar_event).execute()
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while updating event {sub_event_id}: {error}")
@@ -217,10 +219,10 @@ def main():
                 </div>
                 """, unsafe_allow_html=True
             )
-            if st.button(f"Edit {event['id']}", key=f"edit_{event['id']}"):
+            if st.button(f"Edit", key=f"edit_{event['id']}"):
                 # Edit event logic
                 pass
-            if st.button(f"Delete {event['id']}", key=f"delete_{event['id']}"):
+            if st.button(f"Delete", key=f"delete_{event['id']}"):
                 try:
                     service.events().delete(calendarId='primary', eventId=event['id']).execute()
                     st.success(f"Event deleted successfully.")
