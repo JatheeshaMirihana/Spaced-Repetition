@@ -68,6 +68,26 @@ def save_event_history(history):
     with open('event_history.json', 'w') as file:
         json.dump(history, file)
 
+def event_exists(service, event_id):
+    try:
+        service.events().get(calendarId='primary', eventId=event_id).execute()
+        return True
+    except googleapiclient.errors.HttpError:
+        return False
+
+def verify_events(service, history):
+    updated_history = {'created_events': [], 'completed_events': [], 'missed_events': []}
+    for event in history['created_events']:
+        if event_exists(service, event['id']):
+            updated_history['created_events'].append(event)
+    for event in history['completed_events']:
+        if event_exists(service, event['id']):
+            updated_history['completed_events'].append(event)
+    for event in history['missed_events']:
+        if event_exists(service, event['id']):
+            updated_history['missed_events'].append(event)
+    return updated_history
+
 def main():
     creds = get_credentials()
 
@@ -84,6 +104,10 @@ def main():
     st.title('Google Calendar Event Scheduler')
 
     history = get_event_history()
+    updated_history = verify_events(service, history)
+    if history != updated_history:
+        save_event_history(updated_history)
+        st.experimental_rerun()
 
     # Right Sidebar for Progress Tracker
     st.sidebar.title('Your Progress')
@@ -92,16 +116,16 @@ def main():
         st.session_state.event_checkboxes = {}
 
     def toggle_completion(event_id, sub_event_id):
-        for event in history['created_events']:
+        for event in updated_history['created_events']:
             if event['id'] == event_id:
                 for sub_event in event['sub_events']:
                     if sub_event['id'] == sub_event_id:
                         sub_event['completed'] = not sub_event['completed']
-                        save_event_history(history)
+                        save_event_history(updated_history)
                         st.experimental_rerun()
                         return
 
-    for event in history['created_events']:
+    for event in updated_history['created_events']:
         event_id = event['id']
         event_title = event['title']
         if len(event_title) > 20:
@@ -158,8 +182,8 @@ def main():
                         st.error(f"An error occurred while deleting event {event['id']}: {error}")
             with col3:
                 if st.button(f"Done", key=f"done_{event['id']}"):
-                    history['completed_events'].append({'id': event['id'], 'date': datetime.datetime.now().isoformat()})
-                    save_event_history(history)
+                    updated_history['completed_events'].append({'id': event['id'], 'date': datetime.datetime.now().isoformat()})
+                    save_event_history(updated_history)
                     st.success(f"Event marked as done.")
                     st.experimental_rerun()  # Refresh the app to show the updated event list
                 if st.button(f"Incomplete", key=f"incomplete_{event['id']}"):
@@ -177,8 +201,8 @@ def main():
                             },
                             'colorId': get_color_id(event_summary.split(':')[0]),
                         }).execute()
-                        history['missed_events'].append({'id': event['id'], 'date': datetime.datetime.now().isoformat()})
-                        save_event_history(history)
+                        updated_history['missed_events'].append({'id': event['id'], 'date': datetime.datetime.now().isoformat()})
+                        save_event_history(updated_history)
                         st.success(f"New event created for incomplete event.")
                         st.experimental_rerun()  # Refresh the app to show the updated event list
                     except googleapiclient.errors.HttpError as error:
@@ -212,7 +236,7 @@ def main():
         sri_lanka_tz = pytz.timezone('Asia/Colombo')
         event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
         success = True
-        history = get_event_history()
+        updated_history = get_event_history()
         sub_events = []
     
         for interval in intervals:
@@ -255,8 +279,8 @@ def main():
                 'title': event_description,
                 'sub_events': sub_events
             }
-            history['created_events'].append(main_event)
-            save_event_history(history)
+            updated_history['created_events'].append(main_event)
+            save_event_history(updated_history)
             st.success('All events created successfully!')
             st.balloons()
             st.experimental_rerun()
