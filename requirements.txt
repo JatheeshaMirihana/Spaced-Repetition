@@ -7,3 +7,4 @@ streamlit
 streamlit_autorefresh
 python-dateutil
 streamlit_lottie
+__future__
