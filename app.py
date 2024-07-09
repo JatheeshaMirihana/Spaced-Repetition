@@ -149,8 +149,7 @@ def main():
                 event_name = sub_event['name']
                 if is_completed:
                     event_name = f"~~{event_name}~~"
-                if st.checkbox(event_name, value=is_completed, key=f"cb_{sub_event_id}", on_change=toggle_completion, args=(event_id, sub_event_id)):
-                    st.session_state.event_checkboxes[sub_event_id] = not is_completed
+                st.radio(event_name, value=is_completed, key=f"rb_{sub_event_id}", on_change=toggle_completion, args=(event_id, sub_event_id))
 
     # Add Reset Progress Button
     st.sidebar.button("Reset Progress", on_click=reset_progress)
@@ -163,7 +162,7 @@ def main():
     time_max = datetime.datetime.combine(selected_date, datetime.time.max).isoformat() + 'Z'
     existing_events = get_existing_events(service, time_min=time_min, time_max=time_max)
 
-    # Display existing events with edit/delete/mark as done options in the sidebar
+    # Display existing events with edit/delete options in the sidebar
     st.sidebar.title('Existing Events')
     for event in existing_events:
         event_start = isoparse(event['start']['dateTime'])
@@ -183,7 +182,7 @@ def main():
                 """,
                 unsafe_allow_html=True
             )
-            col1, col2, col3 = st.columns([1, 1, 1])
+            col1, col2 = st.columns([1, 1])
             with col1:
                 if st.button(f"Edit", key=f"edit_{event['id']}"):
                     st.warning("Edit functionality not implemented yet.")
@@ -195,33 +194,6 @@ def main():
                         st.experimental_rerun()  # Refresh the app to show the updated event list
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while deleting event {event['id']}: {error}")
-            with col3:
-                if st.button(f"Done", key=f"done_{event['id']}"):
-                    updated_history['completed_events'].append({'id': event['id'], 'date': datetime.datetime.now().isoformat()})
-                    save_event_history(updated_history)
-                    st.success(f"Event marked as done.")
-                    st.experimental_rerun()  # Refresh the app to show the updated event list
-                if st.button(f"Incomplete", key=f"incomplete_{event['id']}"):
-                    try:
-                        new_event = service.events().insert(calendarId='primary', body={
-                            'summary': event_summary,
-                            'description': event_description,
-                            'start': {
-                                'dateTime': (datetime.datetime.now() + datetime.timedelta(days=1)).isoformat(),
-                                'timeZone': 'Asia/Colombo',
-                            },
-                            'end': {
-                                'dateTime': (datetime.datetime.now() + datetime.timedelta(days=1, minutes=30)).isoformat(),
-                                'timeZone': 'Asia/Colombo',
-                            },
-                            'colorId': get_color_id(event_summary.split(':')[0]),
-                        }).execute()
-                        updated_history['missed_events'].append({'id': event['id'], 'date': datetime.datetime.now().isoformat()})
-                        save_event_history(updated_history)
-                        st.success(f"New event created for incomplete event.")
-                        st.experimental_rerun()  # Refresh the app to show the updated event list
-                    except googleapiclient.errors.HttpError as error:
-                        st.error(f"An error occurred while creating a new event for incomplete event {event['id']}: {error}")
 
     # Get event details from the user using Streamlit widgets
     event_date = st.date_input("Enter the date you first studied the topic:")
@@ -298,6 +270,9 @@ def main():
             st.success('All events created successfully!')
             st.balloons()
             st.experimental_rerun()
+
+    # Refresh every 10 seconds to check event availability
+    st.experimental_set_query_params(refresh_interval="10")
 
 # Run the app
 if __name__ == '__main__':
