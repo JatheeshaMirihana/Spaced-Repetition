@@ -123,6 +123,19 @@ def toggle_completion(service, event_id, sub_event_id):
                     st.experimental_rerun()
                     return
 
+def render_progress_circle(event):
+    total_sub_events = len(event['sub_events'])
+    completed_sub_events = sum(1 for sub_event in event['sub_events'] if sub_event['completed'])
+    
+    circle_parts = []
+    for i in range(total_sub_events):
+        if i < completed_sub_events:
+            circle_parts.append('<span style="color:green;">&#9679;</span>')  # filled circle part
+        else:
+            circle_parts.append('<span style="color:lightgrey;">&#9675;</span>')  # unfilled circle part
+    
+    return ' '.join(circle_parts)
+
 def main():
     creds = get_credentials()
 
@@ -158,6 +171,7 @@ def main():
         with st.sidebar.expander(f"{event_title}"):
             col1, col2 = st.columns([8, 1])
             with col1:
+                st.markdown(render_progress_circle(event), unsafe_allow_html=True)
                 for sub_event in event['sub_events']:
                     sub_event_id = sub_event['id']
                     is_completed = sub_event['completed']
@@ -195,27 +209,24 @@ def main():
         with st.sidebar.container():
             st.markdown(
                 f"""
-                <div style="background-color:#{color_id}; padding: 10px; margin-bottom: 10px;">
-                Name: {event_summary}<br>
-                Date: {event_start.strftime('%Y-%m-%d')}<br>
-                Duration: {event_start.strftime('%H:%M')} to {event_end.strftime('%H:%M')}<br>
-                Description: {event_description}
+                <div style="background-color:#{color_id}; padding: 10px; border-radius: 5px;">
+                    <h4>{event_summary}</h4>
+                    <p>{event_description}</p>
+                    <p><b>Start:</b> {event_start.strftime('%Y-%m-%d %H:%M')}</p>
+                    <p><b>End:</b> {event_end.strftime('%Y-%m-%d %H:%M')}</p>
                 </div>
-                """,
-                unsafe_allow_html=True
+                """, unsafe_allow_html=True
             )
-            col1, col2 = st.sidebar.columns([1, 1])
-            with col1:
-                if st.button(f"Edit", key=f"edit_{event['id']}"):
-                    st.warning("Edit functionality not implemented yet.")
-            with col2:
-                if st.button(f"Delete", key=f"delete_{event['id']}"):
-                    try:
-                        service.events().delete(calendarId='primary', eventId=event['id']).execute()
-                        st.success(f"Event deleted successfully.")
-                        st.experimental_rerun()  # Refresh the app to show the updated event list
-                    except googleapiclient.errors.HttpError as error:
-                        st.error(f"An error occurred while deleting event {event['id']}: {error}")
+            if st.button(f"Edit {event['id']}", key=f"edit_{event['id']}"):
+                # Edit event logic
+                pass
+            if st.button(f"Delete {event['id']}", key=f"delete_{event['id']}"):
+                try:
+                    service.events().delete(calendarId='primary', eventId=event['id']).execute()
+                    st.success(f"Event deleted successfully.")
+                    st.experimental_rerun()  # Refresh the app to show the updated event list
+                except googleapiclient.errors.HttpError as error:
+                    st.error(f"An error occurred while deleting event {event['id']}: {error}")
 
     # Get event details from the user using Streamlit widgets
     event_date = st.date_input("Enter the date you first studied the topic:")
