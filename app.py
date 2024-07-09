@@ -149,7 +149,7 @@ def main():
                 event_name = sub_event['name']
                 if is_completed:
                     event_name = f"~~{event_name}~~"
-                st.radio(event_name, value=is_completed, key=f"rb_{sub_event_id}", on_change=toggle_completion, args=(event_id, sub_event_id))
+                st.radio(event_name, [is_completed], key=f"rb_{sub_event_id}", on_change=toggle_completion, args=(event_id, sub_event_id))
 
     # Add Reset Progress Button
     st.sidebar.button("Reset Progress", on_click=reset_progress)
@@ -270,9 +270,6 @@ def main():
             st.success('All events created successfully!')
             st.balloons()
             st.experimental_rerun()
-
-    # Refresh every 10 seconds to check event availability
-    st.experimental_set_query_params(refresh_interval="10")
 
 # Run the app
 if __name__ == '__main__':
