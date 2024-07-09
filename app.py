@@ -132,9 +132,9 @@ def render_progress_circle(event):
     circle_parts = []
     for i in range(total_sub_events):
         if i < completed_sub_events:
-            circle_parts.append('<span style="color:green;">&#9679;</span>')  # filled circle part
+            circle_parts.append('<span style="font-size: 24px; color: green;">&#9679;</span>')  # filled circle part
         else:
-            circle_parts.append('<span style="color:lightgrey;">&#9675;</span>')  # unfilled circle part
+            circle_parts.append('<span style="font-size: 24px; color: lightgrey;">&#9675;</span>')  # unfilled circle part
     
     return ' '.join(circle_parts)
 
@@ -170,19 +170,23 @@ def main():
         event_title = event['title']
         if len(event_title) > 20:
             event_title = event_title[:17] + "..."
-        with st.sidebar.expander(f"{event_title}"):
-            col1, col2 = st.columns([8, 1])
+        with st.sidebar.container():
+            st.markdown(render_progress_circle(event), unsafe_allow_html=True)
+            for sub_event in event['sub_events']:
+                sub_event_id = sub_event['id']
+                is_completed = sub_event['completed']
+                event_name = sub_event['name']
+                if is_completed:
+                    event_name = f"~~{event_name}~~"
+                st.checkbox(event_name, value=is_completed, key=f"cb_{sub_event_id}", on_change=toggle_completion, args=(service, event_id, sub_event_id))
+
+            col1, col2 = st.sidebar.columns([1, 1])
             with col1:
-                st.markdown(render_progress_circle(event), unsafe_allow_html=True)
-                for sub_event in event['sub_events']:
-                    sub_event_id = sub_event['id']
-                    is_completed = sub_event['completed']
-                    event_name = sub_event['name']
-                    if is_completed:
-                        event_name = f"~~{event_name}~~"
-                    st.checkbox(event_name, value=is_completed, key=f"cb_{sub_event_id}", on_change=toggle_completion, args=(service, event_id, sub_event_id))
+                if st.button("Edit", key=f"edit_main_{event_id}"):
+                    # Edit event logic
+                    pass
             with col2:
-                if st.button("🗑️", key=f"delete_main_{event_id}"):
+                if st.button("Delete", key=f"delete_main_{event_id}"):
                     try:
                         for sub_event in event['sub_events']:
                             service.events().delete(calendarId='primary', eventId=sub_event['id']).execute()
@@ -205,109 +209,69 @@ def main():
     for event in existing_events:
         event_start = isoparse(event['start']['dateTime'])
         event_end = isoparse(event['end']['dateTime'])
-        event_summary = event.get('summary', 'No Summary')
-        event_description = event.get('description', 'No Description')
-        color_id = get_color_id(event_summary.split(':')[0])
-        with st.sidebar.container():
-            st.markdown(
-                f"""
-                <div style="background-color:#{color_id}; padding: 10px; border-radius: 5px;">
-                    <h4>{event_summary}</h4>
-                    <p>{event_description}</p>
-                    <p><b>Start:</b> {event_start.strftime('%Y-%m-%d %H:%M')}</p>
-                    <p><b>End:</b> {event_end.strftime('%Y-%m-%d %H:%M')}</p>
-                </div>
-                """, unsafe_allow_html=True
-            )
-            if st.button(f"Edit", key=f"edit_{event['id']}"):
+        event_summary = event.get('summary', 'No Title')
+        if len(event_summary) > 20:
+            event_summary = event_summary[:17] + "..."
+        st.sidebar.write(f"**{event_summary}**")
+        st.sidebar.write(f"{convert_to_sri_lanka_time(event_start).strftime('%I:%M %p')} - {convert_to_sri_lanka_time(event_end).strftime('%I:%M %p')}")
+
+        col1, col2 = st.sidebar.columns([1, 1])
+        with col1:
+            if st.button("Edit", key=f"edit_{event['id']}"):
                 # Edit event logic
                 pass
-            if st.button(f"Delete", key=f"delete_{event['id']}"):
+        with col2:
+            if st.button("Delete", key=f"delete_{event['id']}"):
                 try:
                     service.events().delete(calendarId='primary', eventId=event['id']).execute()
-                    st.success(f"Event deleted successfully.")
                     st.experimental_rerun()  # Refresh the app to show the updated event list
                 except googleapiclient.errors.HttpError as error:
                     st.error(f"An error occurred while deleting event {event['id']}: {error}")
 
-    # Get event details from the user using Streamlit widgets
-    event_date = st.date_input("Enter the date you first studied the topic:")
-    event_time = st.time_input("Enter the time you first studied the topic:")
-    study_duration = st.number_input("Enter the duration of your study session (in minutes):", min_value=1)
-    
-    # Dropdown for subjects
-    subjects = ['Physics', 'Chemistry', 'Combined Maths']
-    event_subject = st.selectbox("Select your subject:", subjects)
-    
-    # Text area for event description
-    event_description = st.text_area("Enter a description for the study session:")
-    
-    # List of intervals for spaced repetition
-    intervals = [1, 7, 16, 30, 90, 180, 365]
-    interval_actions = {
-        1: 'Review notes',
-        7: 'Revise thoroughly',
-        16: 'Solve problems',
-        30: 'Revise again',
-        90: 'Test yourself',
-        180: 'Deep review',
-        365: 'Final review'
-    }
-    
-    if st.button("Create Events"):
-        event_datetime = datetime.datetime.combine(event_date, event_time)
-        sri_lanka_tz = pytz.timezone('Asia/Colombo')
-        event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
-        
-        success = True
-        sub_events = []
+    st.header("Create a new event")
+    title = st.text_input("Event Title:")
+    description = st.text_area("Event Description:")
+    start_time = st.time_input("Start Time", value=datetime.time(9, 0))
+    end_time = st.time_input("End Time", value=datetime.time(10, 0))
+    selected_date = st.date_input("Select a date for the event:")
+    subject = st.selectbox("Subject", ["Physics", "Chemistry", "Combined Maths"])
 
-        for interval in intervals:
-            action = interval_actions[interval]
-            event_title = f"{event_subject}: {action}"
-            event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
-            event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
-        
-            # Check if the final event exceeds August 2025 and adjust if necessary
-            if interval == 365 and event_datetime_interval > datetime.datetime(2025, 8, 31, tzinfo=sri_lanka_tz):
-                event_datetime_interval = datetime.datetime(2025, 8, 31, 23, 59, tzinfo=sri_lanka_tz)
-                event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
+    if st.button("Create Event"):
+        event_start = datetime.datetime.combine(selected_date, start_time)
+        event_end = datetime.datetime.combine(selected_date, end_time)
+        color_id = get_color_id(subject)
 
-            event_body = {
-                'summary': event_title,
-                'description': event_description,
-                'start': {
-                    'dateTime': event_datetime_interval.isoformat(),
-                    'timeZone': 'Asia/Colombo',
-                },
-                'end': {
-                    'dateTime': event_end_interval.isoformat(),
-                    'timeZone': 'Asia/Colombo',
-                },
-                'colorId': get_color_id(event_subject),
-            }
+        try:
+            event_result = service.events().insert(calendarId='primary',
+                                                   body={
+                                                       "summary": title,
+                                                       "description": description,
+                                                       "start": {"dateTime": event_start.isoformat(), "timeZone": 'Asia/Colombo'},
+                                                       "end": {"dateTime": event_end.isoformat(), "timeZone": 'Asia/Colombo'},
+                                                       "colorId": color_id,
+                                                   }).execute()
 
-            try:
-                created_event = service.events().insert(calendarId='primary', body=event_body).execute()
-                sub_events.append({'id': created_event['id'], 'name': event_title, 'completed': False})
-            except googleapiclient.errors.HttpError as error:
-                st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
-                success = False
-                break
+            event_id = event_result['id']
+            history = get_event_history()
+            history['created_events'].append({
+                'id': event_id,
+                'title': title,
+                'description': description,
+                'subject': subject,
+                'start': event_start.isoformat(),
+                'end': event_end.isoformat(),
+                'sub_events': [{
+                    'id': event_id,
+                    'name': title,
+                    'start': event_start.isoformat(),
+                    'end': event_end.isoformat(),
+                    'completed': False
+                }]
+            })
+            save_event_history(history)
+            st.success(f"Event created: {event_result.get('htmlLink')}")
+        except googleapiclient.errors.HttpError as error:
+            st.error(f"An error occurred: {error}")
 
-        if success:
-            main_event = {
-                'id': created_event['id'],
-                'date': event_datetime_sri_lanka.isoformat(),
-                'title': event_description,
-                'sub_events': sub_events
-            }
-            updated_history['created_events'].append(main_event)
-            save_event_history(updated_history)
-            st.success('All events created successfully!')
-            st.balloons()
-            st.experimental_rerun()
-
-# Run the app
 if __name__ == '__main__':
     main()
