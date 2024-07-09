@@ -88,6 +88,14 @@ def verify_events(service, history):
             updated_history['missed_events'].append(event)
     return updated_history
 
+def reset_progress():
+    updated_history = get_event_history()
+    for event in updated_history['created_events']:
+        for sub_event in event['sub_events']:
+            sub_event['completed'] = False
+    save_event_history(updated_history)
+    st.experimental_rerun()
+
 def main():
     creds = get_credentials()
 
@@ -139,6 +147,9 @@ def main():
                     event_name = f"~~{event_name}~~"
                 if st.checkbox(event_name, value=is_completed, key=f"cb_{sub_event_id}", on_change=toggle_completion, args=(event_id, sub_event_id)):
                     st.session_state.event_checkboxes[sub_event_id] = not is_completed
+
+    # Add Reset Progress Button
+    st.sidebar.button("Reset Progress", on_click=reset_progress)
 
     # Date picker for existing events preview
     selected_date = st.date_input("Select a date to view existing events:")
