@@ -17,7 +17,7 @@ SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly', 'https://w
 @st.cache_data
 def get_color_id(subject: str) -> str:
     subject = subject.lower()
-    if subject in ['physics', 'p6', 'Physics']:
+    if subject in ['physics', 'p6']:
         return '7'  # Peacock
     elif subject in ['chemistry', 'chem']:
         return '6'  # Tangerine
@@ -68,18 +68,14 @@ def save_event_history(history):
     with open('event_history.json', 'w') as file:
         json.dump(history, file)
 
-def event_exists(service, event_id):
-    try:
-        service.events().get(calendarId='primary', eventId=event_id).execute()
-        return True
-    except googleapiclient.errors.HttpError:
-        return False
-
 def verify_events(service, history):
     updated_history = {'created_events': [], 'completed_events': [], 'missed_events': []}
     for event in history['created_events']:
         if event_exists(service, event['id']):
             updated_history['created_events'].append(event)
+        else:
+            # Event doesn't exist on calendar, remove from progress bar
+            st.session_state.event_checkboxes.pop(event['id'], None)
     for event in history['completed_events']:
         if event_exists(service, event['id']):
             updated_history['completed_events'].append(event)
@@ -87,6 +83,14 @@ def verify_events(service, history):
         if event_exists(service, event['id']):
             updated_history['missed_events'].append(event)
     return updated_history
+
+# Function to check if event exists on Google Calendar
+def event_exists(service, event_id):
+    try:
+        service.events().get(calendarId='primary', eventId=event_id).execute()
+        return True
+    except googleapiclient.errors.HttpError:
+        return False
 
 def reset_progress():
     updated_history = get_event_history()
@@ -247,16 +251,15 @@ def main():
         sri_lanka_tz = pytz.timezone('Asia/Colombo')
         event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
         success = True
-        updated_history = get_event_history()
         sub_events = []
-    
+
         for interval in intervals:
             action = interval_actions[interval]
             event_title = f"{event_subject}: {action}"
             event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
             event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
         
-        # Check if the final event exceeds August 2025 and adjust if necessary
+            # Check if the final event exceeds August 2025 and adjust if necessary
             if interval == 365 and event_datetime_interval > datetime.datetime(2025, 8, 31, tzinfo=sri_lanka_tz):
                 event_datetime_interval = datetime.datetime(2025, 8, 31, 23, 59, tzinfo=sri_lanka_tz)
                 event_end_interval = event_datetime_interval + datetime.timedelta(minutes=study_duration)
@@ -266,14 +269,14 @@ def main():
                 'description': event_description,
                 'start': {
                     'dateTime': event_datetime_interval.isoformat(),
-                        'timeZone': 'Asia/Colombo',
+                    'timeZone': 'Asia/Colombo',
                 },
                 'end': {
                     'dateTime': event_end_interval.isoformat(),
                     'timeZone': 'Asia/Colombo',
                 },
                 'colorId': get_color_id(event_subject),
-        }
+            }
 
             try:
                 created_event = service.events().insert(calendarId='primary', body=event_body).execute()
