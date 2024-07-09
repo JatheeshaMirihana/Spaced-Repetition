@@ -85,28 +85,29 @@ def main():
 
     history = get_event_history()
 
-    # Progress tracker
-    total_events = len(history['created_events'])
-    completed_events = len(history['completed_events'])
-    missed_events = len(history['missed_events'])
-    progress_percentage = (completed_events / total_events) * 100 if total_events > 0 else 0
-    streak_counter = calculate_streak(history['completed_events'])
+    # Right Sidebar for Progress Tracker
+    st.sidebar.title('Your Progress')
 
-    # Display progress tracker on the right sidebar
-    with st.sidebar.container():
-        st.sidebar.title('Progress Tracker')
-        st.sidebar.progress(progress_percentage / 100)
-        st.sidebar.write(f"Completed: {completed_events}/{total_events} events")
-        st.sidebar.write(f"Current streak: {streak_counter} days")
-        st.sidebar.write(f"Missed events: {missed_events}")
-        if st.button("Reset Progress"):
-            history['completed_events'] = []
-            history['missed_events'] = []
+    for event in history['created_events']:
+        event_id = event['id']
+        event_date = isoparse(event['date']).date()
+        event_title = event['title']
+        if len(event_title) > 20:
+            event_title = event_title[:17] + "..."
+        with st.sidebar.expander(f"{event_title}"):
+            for interval_event in event['sub_events']:
+                is_completed = interval_event['completed']
+                event_name = interval_event['name']
+                if is_completed:
+                    event_name = f"~~{event_name}~~"
+                if st.checkbox(event_name, value=is_completed, key=f"cb_{interval_event['id']}"):
+                    interval_event['completed'] = True
+                else:
+                    interval_event['completed'] = False
             save_event_history(history)
-            st.experimental_rerun()  # Refresh the app to show the updated progress
 
     # Date picker for existing events preview
-    selected_date = st.sidebar.date_input("Select a date to view existing events:")
+    selected_date = st.date_input("Select a date to view existing events:")
 
     # Fetch existing events for the selected date
     time_min = datetime.datetime.combine(selected_date, datetime.time.min).isoformat() + 'Z'
@@ -202,6 +203,7 @@ def main():
         event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
         success = True
         history = get_event_history()
+        sub_events = []
     
         for interval in intervals:
             action = interval_actions[interval]
@@ -230,26 +232,23 @@ def main():
 
             try:
                 created_event = service.events().insert(calendarId='primary', body=event_body).execute()
-                history['created_events'].append({'id': created_event['id'], 'date': event_datetime_interval.isoformat()})
-                save_event_history(history)
+                sub_events.append({'id': created_event['id'], 'name': event_title, 'completed': False})
             except googleapiclient.errors.HttpError as error:
                 st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
                 success = False
                 break
 
         if success:
+            main_event = {
+                'id': created_event['id'],
+                'date': event_datetime_sri_lanka.isoformat(),
+                'title': event_description,
+                'sub_events': sub_events
+            }
+            history['created_events'].append(main_event)
+            save_event_history(history)
             st.success('All events created successfully!')
             st.balloons()
-def calculate_streak(completed_events):
-    streak = 0
-    today = datetime.datetime.now().date()
-    for event in sorted(completed_events, key=lambda x: x['date'], reverse=True):
-        event_date = isoparse(event['date']).date()
-        if (today - event_date).days == streak:
-            streak += 1
-        else:
-            break
-    return streak
 
 # Run the app
 if __name__ == '__main__':
