@@ -139,11 +139,15 @@ def render_progress_circle(event):
     return ' '.join(circle_parts)
 
 def render_event_details_tooltip(event_id, sub_event):
+    start_time = convert_to_sri_lanka_time(isoparse(sub_event['start_time']))
+    end_time = convert_to_sri_lanka_time(isoparse(sub_event['end_time']))
     return f"""
     <div class="tooltip" style="position:relative; display:inline-block;">
         <span class="tooltiptext" style="visibility:hidden; width:200px; background-color:lightgray; color:black; text-align:center; padding:5px; border-radius:6px; position:absolute; z-index:1;">
             <strong>{sub_event['name']}</strong><br>
-            {sub_event.get('description', 'No Description')}
+            {sub_event.get('description', 'No Description')}<br>
+            Start: {start_time.strftime('%Y-%m-%d %H:%M')}<br>
+            End: {end_time.strftime('%Y-%m-%d %H:%M')}
         </span>
         <span onmouseover="this.previousElementSibling.style.visibility='visible';" onmouseout="this.previousElementSibling.style.visibility='hidden';">
             {sub_event['name']}
@@ -206,14 +210,11 @@ def main():
                         st.experimental_rerun()  # Refresh the app to show the updated event list
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while deleting event {event_id}: {error}")
+    if st.sidebar.button("Reset Progress"):
+        reset_progress()
 
-    # Date picker for existing events preview
-    st.sidebar.title('Existing Events')
-    selected_date = st.sidebar.date_input("Select a date to view existing events:")
-
-    # Fetch existing events for the selected date
-    time_min = datetime.datetime.combine(selected_date, datetime.time.min).isoformat() + 'Z'
-    time_max = datetime.datetime.combine(selected_date, datetime.time.max).isoformat() + 'Z'
+    time_min = datetime.datetime.utcnow().isoformat() + 'Z'
+    time_max = (datetime.datetime.utcnow() + datetime.timedelta(days=365)).isoformat() + 'Z'
     existing_events = get_existing_events(service, time_min=time_min, time_max=time_max)
 
     # Display existing events with edit/delete options in the sidebar
@@ -304,7 +305,13 @@ def main():
 
             try:
                 created_event = service.events().insert(calendarId='primary', body=event_body).execute()
-                sub_events.append({'id': created_event['id'], 'name': event_title, 'completed': False})
+                sub_events.append({
+                    'id': created_event['id'], 
+                    'name': event_title, 
+                    'completed': False, 
+                    'start_time': event_datetime_interval.isoformat(), 
+                    'end_time': event_end_interval.isoformat()
+                })
             except googleapiclient.errors.HttpError as error:
                 st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
                 success = False
