@@ -135,7 +135,7 @@ def render_progress_circle(event):
             circle_parts.append('<span style="color:green;">&#9679;</span>')  # filled circle part
         else:
             circle_parts.append('<span style="color:lightgrey;">&#9675;</span>')  # unfilled circle part
-    a
+    
     return ' '.join(circle_parts)
 
 def main():
