@@ -230,6 +230,8 @@ def main():
                 except googleapiclient.errors.HttpError as error:
                     st.error(f"An error occurred while deleting event {event['id']}: {error}")
 
+    subjects = ['Physics', 'Chemistry', 'Combined Maths']
+
     # Initialize session state for form inputs if not already present
     if 'event_date' not in st.session_state:
         st.session_state.event_date = datetime.date.today()
@@ -248,7 +250,6 @@ def main():
     st.session_state.study_duration = st.number_input("Enter the duration of your study session (in minutes):", min_value=1, value=st.session_state.study_duration)
     
     # Dropdown for subjects
-    subjects = ['Physics', 'Chemistry', 'Combined Maths']
     st.session_state.event_subject = st.selectbox("Select your subject:", subjects, index=subjects.index(st.session_state.event_subject))
     
     # Text area for event description
