@@ -333,13 +333,13 @@ def main():
                 st.balloons()
 
                 # Clear the form after creating events
-                st.session_state.event_date = datetime.date.today()
-                st.session_state.event_time = datetime.time(9, 0)
-                st.session_state.study_duration = 60
-                st.session_state.event_subject = subjects[0]
-                st.session_state.event_description = ""
+            st.session_state.event_date = datetime.date.today()
+            st.session_state.event_time = datetime.time(9, 0)
+            st.session_state.study_duration = 60
+            st.session_state.event_subject = subjects[0]
+            st.session_state.event_description = ""
 
-                st.experimental_rerun()
+            st.experimental_rerun()
 
 # Run the app
 if __name__ == '__main__':
