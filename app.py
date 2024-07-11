@@ -213,7 +213,7 @@ def main():
                 f"""
                 <div style="background-color:#{color_id}; padding: 10px; border-radius: 5px;">
                     <h4>{event_summary}</h4>
-                    <p>{event_description}</p>
+                    <p><b>Description:</b>{event_description}</p>
                     <p><b>Start:</b> {event_start.strftime('%Y-%m-%d %H:%M')}</p>
                     <p><b>End:</b> {event_end.strftime('%Y-%m-%d %H:%M')}</p>
                 </div>
