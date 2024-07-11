@@ -138,6 +138,19 @@ def render_progress_circle(event):
     
     return ' '.join(circle_parts)
 
+# Other imports and code...
+
+# Sorting function
+def sort_events(events, sort_option):
+    if sort_option == "Title":
+        return sorted(events, key=lambda x: x['title'])
+    elif sort_option == "Date":
+        return sorted(events, key=lambda x: x['date'])
+    elif sort_option == "Completion":
+        return sorted(events, key=lambda x: sum(1 for sub_event in x['sub_events'] if sub_event['completed']), reverse=True)
+    else:
+        return events
+
 def main():
     creds = get_credentials()
 
@@ -162,10 +175,16 @@ def main():
     # Right Sidebar for Progress Tracker
     st.sidebar.title('Your Progress')
 
+    # Add sorting dropdown
+    sort_option = st.sidebar.selectbox("Sort by:", ["Title", "Date", "Completion"], index=0)
+
     if 'event_checkboxes' not in st.session_state:
         st.session_state.event_checkboxes = {}
 
-    for event in updated_history['created_events']:
+    # Sort events based on selected option
+    sorted_events = sort_events(updated_history['created_events'], sort_option)
+
+    for event in sorted_events:
         event_id = event['id']
         event_title = event['title']
         if len(event_title) > 20:
