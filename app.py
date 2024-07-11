@@ -138,19 +138,6 @@ def render_progress_circle(event):
     
     return ' '.join(circle_parts)
 
-def render_event_details_tooltip(event_id, sub_event):
-    return f"""
-    <div class="tooltip" style="position:relative; display:inline-block;">
-        <span class="tooltiptext" style="visibility:hidden; width:200px; background-color:lightgray; color:black; text-align:center; padding:5px; border-radius:6px; position:absolute; z-index:1;">
-            <strong>{sub_event['name']}</strong><br>
-            {sub_event.get('description', 'No Description')}
-        </span>
-        <span onmouseover="this.previousElementSibling.style.visibility='visible';" onmouseout="this.previousElementSibling.style.visibility='hidden';">
-            {sub_event['name']}
-        </span>
-    </div>
-    """
-
 def main():
     creds = get_credentials()
 
@@ -193,8 +180,6 @@ def main():
                     event_name = sub_event['name']
                     if is_completed:
                         event_name = f"~~{event_name}~~"
-                    event_details_tooltip = render_event_details_tooltip(event_id, sub_event)
-                    st.markdown(event_details_tooltip, unsafe_allow_html=True)
                     st.checkbox(event_name, value=is_completed, key=f"cb_{sub_event_id}", on_change=toggle_completion, args=(service, event_id, sub_event_id))
             with col2:
                 if st.button("🗑️", key=f"delete_main_{event_id}"):
