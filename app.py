@@ -323,7 +323,7 @@ def main():
             # Clear the form after creating events
             st.session_state.event_date = datetime.date.today()
             st.session_state.event_time = datetime.time(9, 0)
-            st.session_state.study_duration = ""
+            st.session_state.study_duration = None
             st.session_state.event_subject = subjects[0]
             st.session_state.event_description = ""
 
