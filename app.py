@@ -138,6 +138,19 @@ def render_progress_circle(event):
     
     return ' '.join(circle_parts)
 
+# Other imports and code...
+
+# Sorting function
+def sort_events(events, sort_option):
+    if sort_option == "Title":
+        return sorted(events, key=lambda x: x['title'])
+    elif sort_option == "Date":
+        return sorted(events, key=lambda x: x['date'])
+    elif sort_option == "Completion":
+        return sorted(events, key=lambda x: sum(1 for sub_event in x['sub_events'] if sub_event['completed']), reverse=True)
+    else:
+        return events
+
 def main():
     creds = get_credentials()
 
@@ -162,10 +175,16 @@ def main():
     # Right Sidebar for Progress Tracker
     st.sidebar.title('Your Progress')
 
+    # Add sorting dropdown
+    sort_option = st.sidebar.selectbox("Sort by:", ["Title", "Date", "Completion"], index=0)
+
     if 'event_checkboxes' not in st.session_state:
         st.session_state.event_checkboxes = {}
 
-    for event in updated_history['created_events']:
+    # Sort events based on selected option
+    sorted_events = sort_events(updated_history['created_events'], sort_option)
+
+    for event in sorted_events:
         event_id = event['id']
         event_title = event['title']
         if len(event_title) > 20:
@@ -268,59 +287,71 @@ def main():
     }
     
     if st.button("Create Events"):
-        event_datetime = datetime.datetime.combine(st.session_state.event_date, st.session_state.event_time)
-        sri_lanka_tz = pytz.timezone('Asia/Colombo')
-        event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
+        # Validation checks
+        if not st.session_state.event_date:
+            st.error("Date is required.")
+        elif not st.session_state.event_time:
+            st.error("Time is required.")
+        elif not st.session_state.study_duration:
+            st.error("Study duration is required.")
+        elif not st.session_state.event_subject:
+            st.error("Subject is required.")
+        elif not st.session_state.event_description:
+            st.error("Description is required.")
+        else:
+            event_datetime = datetime.datetime.combine(st.session_state.event_date, st.session_state.event_time)
+            sri_lanka_tz = pytz.timezone('Asia/Colombo')
+            event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
         
-        success = True
-        sub_events = []
+            success = True
+            sub_events = []
 
-        for interval in intervals:
-            action = interval_actions[interval]
-            event_title = f"{st.session_state.event_subject}: {action}"
-            event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
-            event_end_interval = event_datetime_interval + datetime.timedelta(minutes=st.session_state.study_duration)
-        
-            # Check if the final event exceeds August 2025 and adjust if necessary
-            if interval == 365 and event_datetime_interval > datetime.datetime(2025, 8, 31, tzinfo=sri_lanka_tz):
-                event_datetime_interval = datetime.datetime(2025, 8, 31, 23, 59, tzinfo=sri_lanka_tz)
+            for interval in intervals:
+                action = interval_actions[interval]
+                event_title = f"{st.session_state.event_subject}: {action}"
+                event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
                 event_end_interval = event_datetime_interval + datetime.timedelta(minutes=st.session_state.study_duration)
+        
+                # Check if the final event exceeds August 2025 and adjust if necessary
+                if interval == 365 and event_datetime_interval > datetime.datetime(2025, 8, 31, tzinfo=sri_lanka_tz):
+                    event_datetime_interval = datetime.datetime(2025, 8, 31, 23, 59, tzinfo=sri_lanka_tz)
+                    event_end_interval = event_datetime_interval + datetime.timedelta(minutes=st.session_state.study_duration)
 
-            event_body = {
-                'summary': event_title,
-                'description': st.session_state.event_description,
-                'start': {
-                    'dateTime': event_datetime_interval.isoformat(),
-                    'timeZone': 'Asia/Colombo',
-                },
-                'end': {
-                    'dateTime': event_end_interval.isoformat(),
-                    'timeZone': 'Asia/Colombo',
-                },
-                'colorId': get_color_id(st.session_state.event_subject),
-            }
+                event_body = {
+                    'summary': event_title,
+                    'description': st.session_state.event_description,
+                    'start': {
+                        'dateTime': event_datetime_interval.isoformat(),
+                        'timeZone': 'Asia/Colombo',
+                 },
+                    'end': {
+                        'dateTime': event_end_interval.isoformat(),
+                        'timeZone': 'Asia/Colombo',
+                    },
+                    'colorId': get_color_id(st.session_state.event_subject),
+                    }
 
-            try:
-                created_event = service.events().insert(calendarId='primary', body=event_body).execute()
-                sub_events.append({'id': created_event['id'], 'name': event_title, 'completed': False})
-            except googleapiclient.errors.HttpError as error:
-                st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
-                success = False
-                break
+                try:
+                    created_event = service.events().insert(calendarId='primary', body=event_body).execute()
+                    sub_events.append({'id': created_event['id'], 'name': event_title, 'completed': False})
+                except googleapiclient.errors.HttpError as error:
+                    st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
+                    success = False
+                    break
 
-        if success:
-            main_event = {
-                'id': created_event['id'],
-                'date': event_datetime_sri_lanka.isoformat(),
-                'title': st.session_state.event_description,
-                'sub_events': sub_events
-            }
-            updated_history['created_events'].append(main_event)
-            save_event_history(updated_history)
-            st.success('All events created successfully!')
-            st.balloons()
+            if success:
+                main_event = {
+                    'id': created_event['id'],
+                    'date': event_datetime_sri_lanka.isoformat(),
+                    'title': st.session_state.event_description,
+                    'sub_events': sub_events
+                }
+                updated_history['created_events'].append(main_event)
+                save_event_history(updated_history)
+                st.success('All events created successfully!')
+                st.balloons()
 
-            # Clear the form after creating events
+                # Clear the form after creating events
             st.session_state.event_date = datetime.date.today()
             st.session_state.event_time = datetime.time(9, 0)
             st.session_state.study_duration = 60
