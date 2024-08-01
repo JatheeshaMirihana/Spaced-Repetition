@@ -163,7 +163,7 @@ def main():
 
     st.title('Google Calendar Event Scheduler')
 
-    history = get_event_history()
+    history = initialize_event_history()
     updated_history = verify_events(service, history)
     if history != updated_history:
         save_event_history(updated_history)
