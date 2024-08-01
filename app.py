@@ -57,16 +57,13 @@ def get_existing_events(service, calendar_id='primary', time_min=None, time_max=
         st.error(f"An error occurred while fetching events: {error}")
         return []
 
-def get_event_history():
-    if os.path.exists('event_history.json'):
-        with open('event_history.json', 'r') as file:
-            return json.load(file)
-    else:
-        return {'created_events': [], 'completed_events': [], 'missed_events': []}
+def initialize_event_history():
+    if 'event_history' not in st.session_state:
+        st.session_state.event_history = {'created_events': [], 'completed_events': [], 'missed_events': []}
+    return st.session_state.event_history
 
 def save_event_history(history):
-    with open('event_history.json', 'w') as file:
-        json.dump(history, file)
+    st.session_state.event_history = history
 
 def verify_events(service, history):
     updated_history = {'created_events': [], 'completed_events': [], 'missed_events': []}
