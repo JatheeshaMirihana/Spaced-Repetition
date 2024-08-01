@@ -220,72 +220,146 @@ def main():
     time_max = datetime.datetime.combine(selected_date, datetime.time.max).isoformat() + 'Z'
     existing_events = get_existing_events(service, time_min=time_min, time_max=time_max)
 
-    if existing_events:
-        for event in existing_events:
-            st.sidebar.write(f"{event['start'].get('dateTime', event['start'].get('date'))}: {event['summary']}")
-    else:
-        st.sidebar.write("No events found for the selected date.")
+    # Display existing events with edit/delete options in the sidebar
+    for event in existing_events:
+        event_start = isoparse(event['start']['dateTime'])
+        event_end = isoparse(event['end']['dateTime'])
+        event_summary = event.get('summary', 'No Summary')
+        event_description = event.get('description', 'No Description')
+        color_id = get_color_id(event_summary.split(':')[0])
+        with st.sidebar.container():
+            st.markdown(
+                f"""
+                <div style="background-color:#{color_id}; padding: 10px; border-radius: 5px;">
+                    <h4>{event_summary}</h4>
+                    <p><b>Description:</b>{event_description}</p>
+                    <p><b>Start:</b> {event_start.strftime('%Y-%m-%d %H:%M')}</p>
+                    <p><b>End:</b> {event_end.strftime('%Y-%m-%d %H:%M')}</p>
+                </div>
+                """, unsafe_allow_html=True
+            )
+            if st.button(f"Edit", key=f"edit_{event['id']}"):
+                # Edit event logic
+                pass
+            if st.button(f"Delete", key=f"delete_{event['id']}"):
+                try:
+                    service.events().delete(calendarId='primary', eventId=event['id']).execute()
+                    st.success(f"Event deleted successfully.")
+                    st.experimental_rerun()  # Refresh the app to show the updated event list
+                except googleapiclient.errors.HttpError as error:
+                    st.error(f"An error occurred while deleting event {event['id']}: {error}")
 
-    st.sidebar.button('Reset Progress', on_click=reset_progress)
+    subjects = ['Physics', 'Chemistry', 'Combined Maths']
 
-    with st.form(key='event_form', clear_on_submit=True):
-        st.subheader('Create New Study Event')
-        event_title = st.text_input("Title")
-        subject = st.text_input("Subject")
-        start_date = st.date_input("Start Date")
-        start_time = st.time_input("Start Time")
-        duration_hours = st.number_input("Duration (hours)", min_value=1, max_value=12, value=1)
-        duration_minutes = st.number_input("Duration (minutes)", min_value=0, max_value=59, value=0)
-        repeat_frequency = st.number_input("Repeat Frequency (days)", min_value=1, max_value=365, value=7)
-        total_repeats = st.number_input("Total Repeats", min_value=1, max_value=52, value=10)
-        submit_button = st.form_submit_button(label='Create Event')
+    # Initialize session state for form inputs if not already present
+    if 'event_date' not in st.session_state:
+        st.session_state.event_date = datetime.date.today()
+    if 'event_time' not in st.session_state:
+        st.session_state.event_time = datetime.time(9, 0)
+    if 'study_duration' not in st.session_state:
+        st.session_state.study_duration = 60
+    if 'event_subject' not in st.session_state:
+        st.session_state.event_subject = subjects[0]
+    if 'event_description' not in st.session_state:
+        st.session_state.event_description = ""
 
-        if submit_button:
-            if not event_title or not subject:
-                st.warning("Please fill out all required fields.")
-            else:
-                start_dt = datetime.datetime.combine(start_date, start_time)
-                sri_lanka_tz = pytz.timezone('Asia/Colombo')
-                start_dt = sri_lanka_tz.localize(start_dt)
+    # Get event details from the user using Streamlit widgets
+    st.session_state.event_date = st.date_input("Enter the date you first studied the topic:", value=st.session_state.event_date)
+    st.session_state.event_time = st.time_input("Enter the time you first studied the topic:", value=st.session_state.event_time)
+    st.session_state.study_duration = st.number_input("Enter the duration of your study session (in minutes):", min_value=1, value=st.session_state.study_duration)
+    
+    # Dropdown for subjects
+    st.session_state.event_subject = st.selectbox("Select your subject:", subjects, index=subjects.index(st.session_state.event_subject))
+    
+    # Text area for event description
+    st.session_state.event_description = st.text_area("Enter a description for the study session:", value=st.session_state.event_description)
+    
+    # List of intervals for spaced repetition
+    intervals = [1, 7, 16, 30, 90, 180, 365]
+    interval_actions = {
+        1: 'Review notes',
+        7: 'Revise thoroughly',
+        16: 'Solve problems',
+        30: 'Revise again',
+        90: 'Test yourself',
+        180: 'Deep review',
+        365: 'Final review'
+    }
+    
+    if st.button("Create Events"):
+        # Validation checks
+        if not st.session_state.event_date:
+            st.error("Date is required.")
+        elif not st.session_state.event_time:
+            st.error("Time is required.")
+        elif not st.session_state.study_duration:
+            st.error("Study duration is required.")
+        elif not st.session_state.event_subject:
+            st.error("Subject is required.")
+        elif not st.session_state.event_description:
+            st.error("Description is required.")
+        else:
+            event_datetime = datetime.datetime.combine(st.session_state.event_date, st.session_state.event_time)
+            sri_lanka_tz = pytz.timezone('Asia/Colombo')
+            event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
+        
+            success = True
+            sub_events = []
 
-                end_dt = start_dt + datetime.timedelta(hours=duration_hours, minutes=duration_minutes)
+            for interval in intervals:
+                action = interval_actions[interval]
+                event_title = f"{st.session_state.event_subject}: {action}"
+                event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
+                event_end_interval = event_datetime_interval + datetime.timedelta(minutes=st.session_state.study_duration)
+        
+                # Check if the final event exceeds August 2025 and adjust if necessary
+                if interval == 365 and event_datetime_interval > datetime.datetime(2025, 8, 31, tzinfo=sri_lanka_tz):
+                    event_datetime_interval = datetime.datetime(2025, 8, 31, 23, 59, tzinfo=sri_lanka_tz)
+                    event_end_interval = event_datetime_interval + datetime.timedelta(minutes=st.session_state.study_duration)
 
-                sub_events = []
-                for i in range(total_repeats):
-                    event_start = start_dt + datetime.timedelta(days=i * repeat_frequency)
-                    event_end = end_dt + datetime.timedelta(days=i * repeat_frequency)
-                    event = {
-                        'summary': f"{event_title} (Session {i + 1})",
-                        'start': {
-                            'dateTime': event_start.isoformat(),
-                            'timeZone': 'Asia/Colombo',
-                        },
-                        'end': {
-                            'dateTime': event_end.isoformat(),
-                            'timeZone': 'Asia/Colombo',
-                        },
-                        'colorId': get_color_id(subject),
+                event_body = {
+                    'summary': event_title,
+                    'description': st.session_state.event_description,
+                    'start': {
+                        'dateTime': event_datetime_interval.isoformat(),
+                        'timeZone': 'Asia/Colombo',
+                 },
+                    'end': {
+                        'dateTime': event_end_interval.isoformat(),
+                        'timeZone': 'Asia/Colombo',
+                    },
+                    'colorId': get_color_id(st.session_state.event_subject),
                     }
-                    try:
-                        created_event = service.events().insert(calendarId='primary', body=event).execute()
-                        sub_events.append({
-                            'id': created_event['id'],
-                            'name': f"{event_title} (Session {i + 1})",
-                            'completed': False
-                        })
-                    except googleapiclient.errors.HttpError as error:
-                        st.error(f"An error occurred while creating event {i + 1}: {error}")
 
-                event_data = {
-                    'id': sub_events[0]['id'],  # Using the first sub-event's ID as the main event ID
-                    'title': event_title,
-                    'subject': subject,
-                    'sub_events': sub_events,
+                try:
+                    created_event = service.events().insert(calendarId='primary', body=event_body).execute()
+                    sub_events.append({'id': created_event['id'], 'name': event_title, 'completed': False})
+                except googleapiclient.errors.HttpError as error:
+                    st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
+                    success = False
+                    break
+
+            if success:
+                main_event = {
+                    'id': created_event['id'],
+                    'date': event_datetime_sri_lanka.isoformat(),
+                    'title': st.session_state.event_description,
+                    'sub_events': sub_events
                 }
-
-                updated_history['created_events'].append(event_data)
+                updated_history['created_events'].append(main_event)
                 save_event_history(updated_history)
-                st.success(f"Event '{event_title}' created successfully with {total_repeats} sessions.")
+                st.success('All events created successfully!')
+                st.balloons()
 
+                # Clear the form after creating events
+            st.session_state.event_date = datetime.date.today()
+            st.session_state.event_time = datetime.time(9, 0)
+            st.session_state.study_duration = 60
+            st.session_state.event_subject = subjects[0]
+            st.session_state.event_description = ""
+
+            st.experimental_rerun()
+
+# Run the app
 if __name__ == '__main__':
     main()
