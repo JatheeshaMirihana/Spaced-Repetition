@@ -264,53 +264,65 @@ def main():
     # Text area for event description
     st.session_state.event_description = st.text_area("Enter a description for the study session:", value=st.session_state.event_description)
 
+    review_intervals = [1, 7, 14, 30]  # Days for review intervals
+
     if st.button("Schedule Event"):
         start_datetime = datetime.datetime.combine(st.session_state.event_date, st.session_state.event_time)
         end_datetime = start_datetime + datetime.timedelta(minutes=st.session_state.study_duration)
+        new_event_id = None  # ID for the main event to group sub-events
 
-        event_body = {
-            'summary': st.session_state.event_subject,
-            'description': st.session_state.event_description,
-            'start': {
-                'dateTime': start_datetime.isoformat(),
-                'timeZone': 'Asia/Colombo',
-            },
-            'end': {
-                'dateTime': end_datetime.isoformat(),
-                'timeZone': 'Asia/Colombo',
-            },
-            'colorId': get_color_id(st.session_state.event_subject),
+        new_event = {
+            'id': new_event_id,  # Will be updated after creating the first event
+            'title': st.session_state.event_subject,
+            'date': st.session_state.event_date.isoformat(),
+            'sub_events': []
         }
 
-        try:
-            event = service.events().insert(calendarId='primary', body=event_body).execute()
-            st.success(f"Event created: {event.get('htmlLink')}")
-
-            # Save event to history for progress tracking
-            new_event = {
-                'id': event['id'],
-                'title': st.session_state.event_subject,
-                'date': st.session_state.event_date.isoformat(),
-                'sub_events': [
-                    {
-                        'id': event['id'],
-                        'name': st.session_state.event_subject,
-                        'completed': False
-                    }
-                ]
+        for days in review_intervals:
+            review_date = start_datetime + datetime.timedelta(days=days)
+            review_end_datetime = review_date + datetime.timedelta(minutes=st.session_state.study_duration)
+            
+            event_body = {
+                'summary': f"{st.session_state.event_subject} - Review after {days} day(s)",
+                'description': st.session_state.event_description,
+                'start': {
+                    'dateTime': review_date.isoformat(),
+                    'timeZone': 'Asia/Colombo',
+                },
+                'end': {
+                    'dateTime': review_end_datetime.isoformat(),
+                    'timeZone': 'Asia/Colombo',
+                },
+                'colorId': get_color_id(st.session_state.event_subject),
             }
-            updated_history['created_events'].append(new_event)
-            save_event_history(updated_history)
 
-            # Reset input fields
-            st.session_state.event_date = datetime.date.today()
-            st.session_state.event_time = datetime.time(9, 0)
-            st.session_state.study_duration = 60
-            st.session_state.event_subject = "Physics"
-            st.session_state.event_description = ""
+            try:
+                event = service.events().insert(calendarId='primary', body=event_body).execute()
+                if new_event_id is None:
+                    new_event_id = event['id']
+                    new_event['id'] = new_event_id  # Update the main event ID after the first event is created
 
-        except googleapiclient.errors.HttpError as error:
-            st.error(f"An error occurred: {error}")
+                new_event['sub_events'].append({
+                    'id': event['id'],
+                    'name': event_body['summary'],
+                    'completed': False
+                })
+
+                st.success(f"Review event created for {days} day(s) after the initial study: {event.get('htmlLink')}")
+
+            except googleapiclient.errors.HttpError as error:
+                st.error(f"An error occurred: {error}")
+                return  # Exit if there's an error in event creation
+
+        updated_history['created_events'].append(new_event)
+        save_event_history(updated_history)
+
+        # Reset input fields
+        st.session_state.event_date = datetime.date.today()
+        st.session_state.event_time = datetime.time(9, 0)
+        st.session_state.study_duration = 60
+        st.session_state.event_subject = "Physics"
+        st.session_state.event_description = ""
 
     st.sidebar.title('Reset Progress')
     if st.sidebar.button("Reset All Progress"):
