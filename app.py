@@ -1,18 +1,17 @@
 from __future__ import print_function
 import datetime
-import os.path
 import pytz
 import streamlit as st
-from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow
+from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 import googleapiclient.errors
 import json
+import os
 
-SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly', 'https://www.googleapis.com/auth/calendar.events']
+SCOPES = ['https://www.googleapis.com/auth/calendar.events']
 
-@st.cache_data
 def get_color_id(subject: str) -> str:
     subject = subject.lower()
     if subject in ['physics', 'p6']:
@@ -24,28 +23,41 @@ def get_color_id(subject: str) -> str:
     else:
         return '1'  # Default (Lavender)
 
-@st.cache_data
 def convert_to_sri_lanka_time(dt: datetime.datetime) -> datetime.datetime:
     sri_lanka_tz = pytz.timezone('Asia/Colombo')
     return dt.astimezone(sri_lanka_tz)
 
 def get_credentials():
     creds = None
-    try:
-        if os.path.exists('token.json'):
-            creds = Credentials.from_authorized_user_file('token.json', SCOPES)
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
-                creds = flow.run_local_server(port=0)
-            # Save the credentials for the next run
-            with open('token.json', 'w') as token:
-                token.write(creds.to_json())
-    except Exception as e:
-        st.error(f"An error occurred during authentication: {e}")
+
+    # Check if token is already in session state
+    if 'token' in st.session_state:
+        creds = Credentials.from_authorized_user_info(st.session_state['token'], SCOPES)
+
+    # If credentials are not valid, initiate the OAuth flow
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            # Use the credentials.json file for initiating the OAuth flow
+            flow = Flow.from_client_secrets_file('credentials.json', SCOPES)
+            flow.redirect_uri = st.secrets["REDIRECT_URI"]
+
+            auth_url, state = flow.authorization_url(access_type='offline', include_granted_scopes='true')
+            st.session_state['state'] = state
+            st.write(f"Please authorize access: [Click here]({auth_url})")
+            st.stop()
+
+        st.session_state['token'] = creds.to_json()
+
     return creds
+
+def save_token_info(flow):
+    auth_response = st.experimental_get_query_params()
+    if 'code' in auth_response:
+        flow.fetch_token(authorization_response=st.experimental_get_url())
+        credentials = flow.credentials
+        st.session_state['token'] = credentials.to_json()
 
 def get_existing_events(service, calendar_id='primary', time_min=None, time_max=None):
     try:
@@ -72,7 +84,6 @@ def verify_events(service, history):
         if event_exists(service, event['id']):
             updated_history['created_events'].append(event)
         else:
-            # Event doesn't exist on calendar, remove from progress bar
             st.session_state.event_checkboxes.pop(event['id'], None)
     for event in history['completed_events']:
         if event_exists(service, event['id']):
@@ -82,7 +93,6 @@ def verify_events(service, history):
             updated_history['missed_events'].append(event)
     return updated_history
 
-# Function to check if event exists on Google Calendar
 def event_exists(service, event_id):
     try:
         service.events().get(calendarId='primary', eventId=event_id).execute()
@@ -96,7 +106,6 @@ def reset_progress():
         for sub_event in event['sub_events']:
             sub_event['completed'] = False
     save_event_history(updated_history)
-    # Update session state directly
     st.session_state['event_history'] = updated_history
 
 def toggle_completion(service, event_id, sub_event_id):
@@ -106,7 +115,6 @@ def toggle_completion(service, event_id, sub_event_id):
             for sub_event in event['sub_events']:
                 if sub_event['id'] == sub_event_id:
                     sub_event['completed'] = not sub_event['completed']
-                    # Update Google Calendar event
                     try:
                         calendar_event = service.events().get(calendarId='primary', eventId=sub_event_id).execute()
                         if 'originalColorId' not in sub_event:
@@ -121,7 +129,6 @@ def toggle_completion(service, event_id, sub_event_id):
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while updating event {sub_event_id}: {error}")
                     save_event_history(history)
-                    # Update session state directly
                     st.session_state['event_history'] = history
                     return
 
@@ -138,7 +145,6 @@ def render_progress_circle(event):
     
     return ' '.join(circle_parts)
 
-# Sorting function
 def sort_events(events, sort_option):
     if sort_option == "Title":
         return sorted(events, key=lambda x: x['title'])
@@ -164,7 +170,6 @@ def main():
 
     st.title('Google Calendar Event Scheduler')
 
-    # Load or verify event history
     if 'event_history' not in st.session_state:
         history = get_event_history()
         updated_history = verify_events(service, history)
@@ -174,16 +179,12 @@ def main():
     else:
         updated_history = st.session_state['event_history']
 
-    # Right Sidebar for Progress Tracker
     st.sidebar.title('Your Progress')
-
-    # Add sorting dropdown
     sort_option = st.sidebar.selectbox("Sort by:", ["Title", "Date", "Completion"], index=0)
 
     if 'event_checkboxes' not in st.session_state:
         st.session_state.event_checkboxes = {}
 
-    # Sort events based on selected option
     sorted_events = sort_events(updated_history['created_events'], sort_option)
 
     for event in sorted_events:
@@ -198,41 +199,23 @@ def main():
                 for sub_event in event['sub_events']:
                     sub_event_id = sub_event['id']
                     is_completed = sub_event['completed']
-                    event_name = sub_event['name']  # Use description as the name
+                    event_name = sub_event['name']
                     if is_completed:
                         event_name = f"~~{event_name}~~"
                     st.checkbox(event_name, value=is_completed, key=f"cb_{sub_event_id}", on_change=toggle_completion, args=(service, event_id, sub_event_id))
+
             with col2:
-                if st.button("🗑️", key=f"delete_main_{event_id}"):
-                    try:
-                        for sub_event in event['sub_events']:
-                            service.events().delete(calendarId='primary', eventId=sub_event['id']).execute()
-                        updated_history['created_events'] = [e for e in updated_history['created_events'] if e['id'] != event_id]
-                        save_event_history(updated_history)
-                        st.session_state['event_history'] = updated_history
-                        st.sidebar.success(f"Deleted {event['title']} successfully!")
-                    except googleapiclient.errors.HttpError as error:
-                        st.error(f"An error occurred while deleting event {event_id}: {error}")
+                delete_btn = st.button("Delete", key=f"delete_{event_id}")
+                if delete_btn:
+                    st.session_state.event_checkboxes.pop(event_id, None)
+                    delete_event(service, event_id)
+                    updated_history['created_events'] = [e for e in updated_history['created_events'] if e['id'] != event_id]
+                    save_event_history(updated_history)
+                    st.session_state['event_history'] = updated_history
 
-    # Display events from selected date
-    selected_date = st.sidebar.date_input("Select a date to view events:")
-    time_min = datetime.datetime.combine(selected_date, datetime.time.min).isoformat() + 'Z'
-    time_max = datetime.datetime.combine(selected_date, datetime.time.max).isoformat() + 'Z'
-    existing_events = get_existing_events(service, time_min=time_min, time_max=time_max)
-
-    if not existing_events:
-        st.sidebar.write("No events found.")
-    else:
-        for event in existing_events:
-            event_start = isoparse(event['start'].get('dateTime', event['start'].get('date')))
-            event_end = isoparse(event['end'].get('dateTime', event['end'].get('date')))
-            event_duration = event_end - event_start
-            event_summary = event.get('summary', 'No Title')
-            event_description = event.get('description', '')
-            st.sidebar.write(f"**{event_description}**")  # Display description instead of summary
-            st.sidebar.write(f"- Time: {event_start.strftime('%I:%M %p')} - {event_end.strftime('%I:%M %p')}")
-            st.sidebar.write(f"- Duration: {event_duration}")
-            st.sidebar.write("---")
+    st.sidebar.title('Reset Progress')
+    if st.sidebar.button("Reset All Progress"):
+        reset_progress()
 
     # Left Sidebar for New Event Scheduler
     st.sidebar.title('Schedule New Event')
@@ -338,10 +321,6 @@ def main():
             st.session_state.study_duration = 60
             st.session_state.event_subject = "Physics"
             st.session_state.event_description = ""
-
-    st.sidebar.title('Reset Progress')
-    if st.sidebar.button("Reset All Progress"):
-        reset_progress()
 
 if __name__ == '__main__':
     main()
