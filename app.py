@@ -208,15 +208,13 @@ def main():
                             service.events().delete(calendarId='primary', eventId=sub_event['id']).execute()
                         updated_history['created_events'] = [e for e in updated_history['created_events'] if e['id'] != event_id]
                         save_event_history(updated_history)
-                        st.experimental_rerun()  # Refresh the app to show the updated event list
+                        st.success(f"Deleted {event['title']} successfully!")
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while deleting event {event_id}: {error}")
+                    st.experimental_rerun()
 
-    # Date picker for existing events preview
-    st.sidebar.title('Existing Events')
-    selected_date = st.sidebar.date_input("Select a date to view existing events:")
-
-    # Fetch existing events for the selected date
+    # Display events from selected date
+    selected_date = st.sidebar.date_input("Select a date to view events:")
     time_min = datetime.datetime.combine(selected_date, datetime.time.min).isoformat() + 'Z'
     time_max = datetime.datetime.combine(selected_date, datetime.time.max).isoformat() + 'Z'
     existing_events = get_existing_events(service, time_min=time_min, time_max=time_max)
@@ -264,9 +262,10 @@ def main():
     # Text area for event description
     st.session_state.event_description = st.text_area("Enter a description for the study session:", value=st.session_state.event_description)
 
-    intervals = [1, 7, 16, 30, 90, 180]  # Days for review intervals
+    intervals = [1, 3, 7, 16, 30, 90, 180]  # Days for review intervals
     interval_actions = {
         1: 'Review notes',
+        3: 'Revise key concepts',
         7: 'Revise thoroughly',
         16: 'Solve problems',
         30: 'Revise again',
@@ -285,6 +284,8 @@ def main():
             'date': st.session_state.event_date.isoformat(),
             'sub_events': []
         }
+
+        all_events_created = True
 
         for days in intervals:
             review_date = start_datetime + datetime.timedelta(days=days)
@@ -316,21 +317,23 @@ def main():
                     'completed': False
                 })
 
-                st.success(f"Review event created for {days} day(s) after the initial study: {event.get('htmlLink')}")
-
             except googleapiclient.errors.HttpError as error:
                 st.error(f"An error occurred: {error}")
-                return  # Exit if there's an error in event creation
+                all_events_created = False
+                break  # Exit if there's an error in event creation
 
-        updated_history['created_events'].append(new_event)
-        save_event_history(updated_history)
+        if all_events_created:
+            st.success("All review events created successfully!")
+            updated_history['created_events'].append(new_event)
+            save_event_history(updated_history)
 
-        # Reset input fields
-        st.session_state.event_date = datetime.date.today()
-        st.session_state.event_time = datetime.time(9, 0)
-        st.session_state.study_duration = 60
-        st.session_state.event_subject = "Physics"
-        st.session_state.event_description = ""
+            # Reset input fields
+            st.session_state.event_date = datetime.date.today()
+            st.session_state.event_time = datetime.time(9, 0)
+            st.session_state.study_duration = 60
+            st.session_state.event_subject = "Physics"
+            st.session_state.event_description = ""
+            st.session_state['update'] = True  # Force an update of the progress section
 
     st.sidebar.title('Reset Progress')
     if st.sidebar.button("Reset All Progress"):
