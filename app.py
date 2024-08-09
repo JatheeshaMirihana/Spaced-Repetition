@@ -122,7 +122,8 @@ def toggle_completion(service, event_id, sub_event_id):
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while updating event {sub_event_id}: {error}")
                     save_event_history(history)
-                    st.experimental_rerun()
+                    # Instead of rerunning the app, just save the session state
+                    st.session_state['update'] = True
                     return
 
 def render_progress_circle(event):
@@ -220,146 +221,64 @@ def main():
     time_max = datetime.datetime.combine(selected_date, datetime.time.max).isoformat() + 'Z'
     existing_events = get_existing_events(service, time_min=time_min, time_max=time_max)
 
-    # Display existing events with edit/delete options in the sidebar
     for event in existing_events:
-        event_start = isoparse(event['start']['dateTime'])
-        event_end = isoparse(event['end']['dateTime'])
-        event_summary = event.get('summary', 'No Summary')
-        event_description = event.get('description', 'No Description')
-        color_id = get_color_id(event_summary.split(':')[0])
-        with st.sidebar.container():
-            st.markdown(
-                f"""
-                <div style="background-color:#{color_id}; padding: 10px; border-radius: 5px;">
-                    <h4>{event_summary}</h4>
-                    <p><b>Description:</b>{event_description}</p>
-                    <p><b>Start:</b> {event_start.strftime('%Y-%m-%d %H:%M')}</p>
-                    <p><b>End:</b> {event_end.strftime('%Y-%m-%d %H:%M')}</p>
-                </div>
-                """, unsafe_allow_html=True
-            )
-            if st.button(f"Edit", key=f"edit_{event['id']}"):
-                # Edit event logic
-                pass
-            if st.button(f"Delete", key=f"delete_{event['id']}"):
-                try:
-                    service.events().delete(calendarId='primary', eventId=event['id']).execute()
-                    st.success(f"Event deleted successfully.")
-                    st.experimental_rerun()  # Refresh the app to show the updated event list
-                except googleapiclient.errors.HttpError as error:
-                    st.error(f"An error occurred while deleting event {event['id']}: {error}")
+        event_summary = event.get('summary', 'No Title')
+        event_start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
+        event_end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date'))
+        st.sidebar.write(f"{event_summary} ({event_start} - {event_end})")
 
-    subjects = ['Physics', 'Chemistry', 'Combined Maths']
+    # Left Main Area for Adding New Events
+    st.header('Add a New Event')
 
-    # Initialize session state for form inputs if not already present
-    if 'event_date' not in st.session_state:
-        st.session_state.event_date = datetime.date.today()
-    if 'event_time' not in st.session_state:
-        st.session_state.event_time = datetime.time(9, 0)
-    if 'study_duration' not in st.session_state:
-        st.session_state.study_duration = 60
-    if 'event_subject' not in st.session_state:
-        st.session_state.event_subject = subjects[0]
-    if 'event_description' not in st.session_state:
-        st.session_state.event_description = ""
-
-    # Get event details from the user using Streamlit widgets
-    st.session_state.event_date = st.date_input("Enter the date you first studied the topic:", value=st.session_state.event_date)
-    st.session_state.event_time = st.time_input("Enter the time you first studied the topic:", value=st.session_state.event_time)
-    st.session_state.study_duration = st.number_input("Enter the duration of your study session (in minutes):", min_value=1, value=st.session_state.study_duration)
-    
-    # Dropdown for subjects
-    st.session_state.event_subject = st.selectbox("Select your subject:", subjects, index=subjects.index(st.session_state.event_subject))
-    
-    # Text area for event description
-    st.session_state.event_description = st.text_area("Enter a description for the study session:", value=st.session_state.event_description)
-    
-    # List of intervals for spaced repetition
-    intervals = [1, 7, 16, 30, 90, 180, 365]
-    interval_actions = {
-        1: 'Review notes',
-        7: 'Revise thoroughly',
-        16: 'Solve problems',
-        30: 'Revise again',
-        90: 'Test yourself',
-        180: 'Deep review',
-        365: 'Final review'
-    }
-    
-    if st.button("Create Events"):
-        # Validation checks
-        if not st.session_state.event_date:
-            st.error("Date is required.")
-        elif not st.session_state.event_time:
-            st.error("Time is required.")
-        elif not st.session_state.study_duration:
-            st.error("Study duration is required.")
-        elif not st.session_state.event_subject:
-            st.error("Subject is required.")
-        elif not st.session_state.event_description:
-            st.error("Description is required.")
-        else:
-            event_datetime = datetime.datetime.combine(st.session_state.event_date, st.session_state.event_time)
-            sri_lanka_tz = pytz.timezone('Asia/Colombo')
-            event_datetime_sri_lanka = sri_lanka_tz.localize(event_datetime)
-        
-            success = True
-            sub_events = []
-
-            for interval in intervals:
-                action = interval_actions[interval]
-                event_title = f"{st.session_state.event_subject}: {action}"
-                event_datetime_interval = event_datetime_sri_lanka + datetime.timedelta(days=interval)
-                event_end_interval = event_datetime_interval + datetime.timedelta(minutes=st.session_state.study_duration)
-        
-                # Check if the final event exceeds August 2025 and adjust if necessary
-                if interval == 365 and event_datetime_interval > datetime.datetime(2025, 8, 31, tzinfo=sri_lanka_tz):
-                    event_datetime_interval = datetime.datetime(2025, 8, 31, 23, 59, tzinfo=sri_lanka_tz)
-                    event_end_interval = event_datetime_interval + datetime.timedelta(minutes=st.session_state.study_duration)
-
-                event_body = {
-                    'summary': event_title,
-                    'description': st.session_state.event_description,
-                    'start': {
-                        'dateTime': event_datetime_interval.isoformat(),
-                        'timeZone': 'Asia/Colombo',
-                 },
-                    'end': {
-                        'dateTime': event_end_interval.isoformat(),
-                        'timeZone': 'Asia/Colombo',
-                    },
-                    'colorId': get_color_id(st.session_state.event_subject),
-                    }
-
-                try:
-                    created_event = service.events().insert(calendarId='primary', body=event_body).execute()
-                    sub_events.append({'id': created_event['id'], 'name': event_title, 'completed': False})
-                except googleapiclient.errors.HttpError as error:
-                    st.error(f"An error occurred while creating the event for interval {interval} days: {error}")
-                    success = False
-                    break
-
-            if success:
-                main_event = {
+    title = st.text_input("Event Title")
+    subject = st.text_input("Subject")
+    date = st.date_input("Event Date")
+    start_time = st.time_input("Start Time", value=datetime.time(9, 0))
+    end_time = st.time_input("End Time", value=datetime.time(10, 0))
+    if len(title) > 0 and len(subject) > 0:
+        if st.button("Add Event"):
+            start_datetime = datetime.datetime.combine(date, start_time).isoformat()
+            end_datetime = datetime.datetime.combine(date, end_time).isoformat()
+            event_body = {
+                'summary': title,
+                'description': f'Subject: {subject}',
+                'start': {
+                    'dateTime': start_datetime,
+                    'timeZone': 'Asia/Colombo',
+                },
+                'end': {
+                    'dateTime': end_datetime,
+                    'timeZone': 'Asia/Colombo',
+                },
+                'colorId': get_color_id(subject),
+            }
+            try:
+                created_event = service.events().insert(calendarId='primary', body=event_body).execute()
+                sub_event = {
                     'id': created_event['id'],
-                    'date': event_datetime_sri_lanka.isoformat(),
-                    'title': st.session_state.event_description,
-                    'sub_events': sub_events
+                    'name': title,
+                    'completed': False
                 }
-                updated_history['created_events'].append(main_event)
+                # Check if event with the same date exists
+                for existing_event in updated_history['created_events']:
+                    if existing_event['date'] == str(date):
+                        existing_event['sub_events'].append(sub_event)
+                        break
+                else:
+                    new_event = {
+                        'id': created_event['id'],
+                        'title': title,
+                        'date': str(date),
+                        'sub_events': [sub_event]
+                    }
+                    updated_history['created_events'].append(new_event)
                 save_event_history(updated_history)
-                st.success('All events created successfully!')
-                st.balloons()
+                st.success("Event created successfully!")
+                st.experimental_rerun()  # Refresh the app to show the new event in the progress bar
+            except googleapiclient.errors.HttpError as error:
+                st.error(f"An error occurred: {error}")
+    else:
+        st.warning("Please enter both the title and subject.")
 
-                # Clear the form after creating events
-            st.session_state.event_date = datetime.date.today()
-            st.session_state.event_time = datetime.time(9, 0)
-            st.session_state.study_duration = 60
-            st.session_state.event_subject = subjects[0]
-            st.session_state.event_description = ""
-
-            st.experimental_rerun()
-
-# Run the app
 if __name__ == '__main__':
     main()
