@@ -294,7 +294,7 @@ def main():
             review_end_datetime = review_date + datetime.timedelta(minutes=st.session_state.study_duration)
             
             event_body = {
-                'summary': f"{st.session_state.event_subject} - {interval_actions[days]} after {days} day(s)",
+                'summary': f"Day {days}: {interval_actions[days]}",
                 'description': st.session_state.event_description,
                 'start': {
                     'dateTime': review_date.isoformat(),
@@ -315,7 +315,7 @@ def main():
 
                 new_event['sub_events'].append({
                     'id': event['id'],
-                    'name': event_body['description'],  # Use description as the name
+                    'name': f"Day {days}: {interval_actions[days]}",  # Set subtitle as "Day X: [Action]"
                     'completed': False
                 })
 
