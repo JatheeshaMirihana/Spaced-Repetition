@@ -264,7 +264,15 @@ def main():
     # Text area for event description
     st.session_state.event_description = st.text_area("Enter a description for the study session:", value=st.session_state.event_description)
 
-    review_intervals = [1, 7, 14, 30]  # Days for review intervals
+    intervals = [1, 7, 16, 30, 90, 180]  # Days for review intervals
+    interval_actions = {
+        1: 'Review notes',
+        7: 'Revise thoroughly',
+        16: 'Solve problems',
+        30: 'Revise again',
+        90: 'Test yourself',
+        180: 'Deep review',
+    }
 
     if st.button("Schedule Event"):
         start_datetime = datetime.datetime.combine(st.session_state.event_date, st.session_state.event_time)
@@ -278,12 +286,12 @@ def main():
             'sub_events': []
         }
 
-        for days in review_intervals:
+        for days in intervals:
             review_date = start_datetime + datetime.timedelta(days=days)
             review_end_datetime = review_date + datetime.timedelta(minutes=st.session_state.study_duration)
             
             event_body = {
-                'summary': f"{st.session_state.event_subject} - Review after {days} day(s)",
+                'summary': f"{st.session_state.event_subject} - {interval_actions[days]} after {days} day(s)",
                 'description': st.session_state.event_description,
                 'start': {
                     'dateTime': review_date.isoformat(),
