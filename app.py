@@ -125,32 +125,6 @@ def toggle_completion(service, event_id, sub_event_id):
                     st.experimental_rerun()
                     return
 
-def render_progress_circle(event):
-    total_sub_events = len(event['sub_events'])
-    completed_sub_events = sum(1 for sub_event in event['sub_events'] if sub_event['completed'])
-    
-    circle_parts = []
-    for i in range(total_sub_events):
-        if i < completed_sub_events:
-            circle_parts.append('<span style="color:green;">&#9679;</span>')  # filled circle part
-        else:
-            circle_parts.append('<span style="color:lightgrey;">&#9675;</span>')  # unfilled circle part
-    
-    return ' '.join(circle_parts)
-
-# Other imports and code...
-
-# Sorting function
-def sort_events(events, sort_option):
-    if sort_option == "Title":
-        return sorted(events, key=lambda x: x['title'])
-    elif sort_option == "Date":
-        return sorted(events, key=lambda x: x['date'])
-    elif sort_option == "Completion":
-        return sorted(events, key=lambda x: sum(1 for sub_event in x['sub_events'] if sub_event['completed']), reverse=True)
-    else:
-        return events
-
 def main():
     creds = get_credentials()
 
