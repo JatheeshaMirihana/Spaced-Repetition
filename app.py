@@ -98,7 +98,8 @@ def reset_progress():
         for sub_event in event['sub_events']:
             sub_event['completed'] = False
     save_event_history(updated_history)
-    st.experimental_rerun()
+    # Update session state directly
+    st.session_state['event_history'] = updated_history
 
 def toggle_completion(service, event_id, sub_event_id):
     history = get_event_history()
@@ -122,8 +123,8 @@ def toggle_completion(service, event_id, sub_event_id):
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while updating event {sub_event_id}: {error}")
                     save_event_history(history)
-                    # Instead of rerunning the app, just save the session state
-                    st.session_state['update'] = True
+                    # Update session state directly
+                    st.session_state['event_history'] = history
                     return
 
 def render_progress_circle(event):
@@ -167,11 +168,15 @@ def main():
 
     st.title('Google Calendar Event Scheduler')
 
-    history = get_event_history()
-    updated_history = verify_events(service, history)
-    if history != updated_history:
-        save_event_history(updated_history)
-        st.experimental_rerun()
+    # Load or verify event history
+    if 'event_history' not in st.session_state:
+        history = get_event_history()
+        updated_history = verify_events(service, history)
+        if history != updated_history:
+            save_event_history(updated_history)
+        st.session_state['event_history'] = updated_history
+    else:
+        updated_history = st.session_state['event_history']
 
     # Right Sidebar for Progress Tracker
     st.sidebar.title('Your Progress')
@@ -208,10 +213,10 @@ def main():
                             service.events().delete(calendarId='primary', eventId=sub_event['id']).execute()
                         updated_history['created_events'] = [e for e in updated_history['created_events'] if e['id'] != event_id]
                         save_event_history(updated_history)
+                        st.session_state['event_history'] = updated_history
                         st.success(f"Deleted {event['title']} successfully!")
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while deleting event {event_id}: {error}")
-                    st.experimental_rerun()
 
     # Display events from selected date
     selected_date = st.sidebar.date_input("Select a date to view events:")
@@ -327,13 +332,15 @@ def main():
             updated_history['created_events'].append(new_event)
             save_event_history(updated_history)
 
+            # Update session state directly
+            st.session_state['event_history'] = updated_history
+
             # Reset input fields
             st.session_state.event_date = datetime.date.today()
             st.session_state.event_time = datetime.time(9, 0)
             st.session_state.study_duration = 60
             st.session_state.event_subject = "Physics"
             st.session_state.event_description = ""
-            st.session_state['update'] = True  # Force an update of the progress section
 
     st.sidebar.title('Reset Progress')
     if st.sidebar.button("Reset All Progress"):
