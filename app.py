@@ -221,64 +221,100 @@ def main():
     time_max = datetime.datetime.combine(selected_date, datetime.time.max).isoformat() + 'Z'
     existing_events = get_existing_events(service, time_min=time_min, time_max=time_max)
 
-    for event in existing_events:
-        event_summary = event.get('summary', 'No Title')
-        event_start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
-        event_end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date'))
-        st.sidebar.write(f"{event_summary} ({event_start} - {event_end})")
-
-    # Left Main Area for Adding New Events
-    st.header('Add a New Event')
-
-    title = st.text_input("Event Title")
-    subject = st.text_input("Subject")
-    date = st.date_input("Event Date")
-    start_time = st.time_input("Start Time", value=datetime.time(9, 0))
-    end_time = st.time_input("End Time", value=datetime.time(10, 0))
-    if len(title) > 0 and len(subject) > 0:
-        if st.button("Add Event"):
-            start_datetime = datetime.datetime.combine(date, start_time).isoformat()
-            end_datetime = datetime.datetime.combine(date, end_time).isoformat()
-            event_body = {
-                'summary': title,
-                'description': f'Subject: {subject}',
-                'start': {
-                    'dateTime': start_datetime,
-                    'timeZone': 'Asia/Colombo',
-                },
-                'end': {
-                    'dateTime': end_datetime,
-                    'timeZone': 'Asia/Colombo',
-                },
-                'colorId': get_color_id(subject),
-            }
-            try:
-                created_event = service.events().insert(calendarId='primary', body=event_body).execute()
-                sub_event = {
-                    'id': created_event['id'],
-                    'name': title,
-                    'completed': False
-                }
-                # Check if event with the same date exists
-                for existing_event in updated_history['created_events']:
-                    if existing_event['date'] == str(date):
-                        existing_event['sub_events'].append(sub_event)
-                        break
-                else:
-                    new_event = {
-                        'id': created_event['id'],
-                        'title': title,
-                        'date': str(date),
-                        'sub_events': [sub_event]
-                    }
-                    updated_history['created_events'].append(new_event)
-                save_event_history(updated_history)
-                st.success("Event created successfully!")
-                st.experimental_rerun()  # Refresh the app to show the new event in the progress bar
-            except googleapiclient.errors.HttpError as error:
-                st.error(f"An error occurred: {error}")
+    if not existing_events:
+        st.sidebar.write("No events found.")
     else:
-        st.warning("Please enter both the title and subject.")
+        for event in existing_events:
+            event_start = isoparse(event['start'].get('dateTime', event['start'].get('date')))
+            event_end = isoparse(event['end'].get('dateTime', event['end'].get('date')))
+            event_duration = event_end - event_start
+            event_summary = event.get('summary', 'No Title')
+            st.sidebar.write(f"**{event_summary}**")
+            st.sidebar.write(f"- Time: {event_start.strftime('%I:%M %p')} - {event_end.strftime('%I:%M %p')}")
+            st.sidebar.write(f"- Duration: {event_duration}")
+            st.sidebar.write("---")
+
+    # Left Sidebar for New Event Scheduler
+    st.sidebar.title('Schedule New Event')
+
+    if 'event_date' not in st.session_state:
+        st.session_state.event_date = datetime.date.today()
+
+    if 'event_time' not in st.session_state:
+        st.session_state.event_time = datetime.time(9, 0)
+
+    if 'study_duration' not in st.session_state:
+        st.session_state.study_duration = 60  # Default to 60 minutes
+
+    if 'event_subject' not in st.session_state:
+        st.session_state.event_subject = "Physics"  # Default to 'Physics'
+
+    if 'event_description' not in st.session_state:
+        st.session_state.event_description = ""
+
+    subjects = ["Physics", "Chemistry", "Combined Maths"]  # List of subjects
+
+    st.session_state.event_date = st.date_input("Enter the date you first studied the topic:", value=st.session_state.event_date)
+    st.session_state.event_time = st.time_input("Enter the time you first studied the topic:", value=st.session_state.event_time)
+    st.session_state.study_duration = st.number_input("Enter the duration of your study session (in minutes):", min_value=1, value=st.session_state.study_duration)
+
+    # Dropdown for subjects
+    st.session_state.event_subject = st.selectbox("Select your subject:", subjects, index=subjects.index(st.session_state.event_subject))
+
+    # Text area for event description
+    st.session_state.event_description = st.text_area("Enter a description for the study session:", value=st.session_state.event_description)
+
+    if st.button("Schedule Event"):
+        start_datetime = datetime.datetime.combine(st.session_state.event_date, st.session_state.event_time)
+        end_datetime = start_datetime + datetime.timedelta(minutes=st.session_state.study_duration)
+
+        event_body = {
+            'summary': st.session_state.event_subject,
+            'description': st.session_state.event_description,
+            'start': {
+                'dateTime': start_datetime.isoformat(),
+                'timeZone': 'Asia/Colombo',
+            },
+            'end': {
+                'dateTime': end_datetime.isoformat(),
+                'timeZone': 'Asia/Colombo',
+            },
+            'colorId': get_color_id(st.session_state.event_subject),
+        }
+
+        try:
+            event = service.events().insert(calendarId='primary', body=event_body).execute()
+            st.success(f"Event created: {event.get('htmlLink')}")
+
+            # Save event to history for progress tracking
+            new_event = {
+                'id': event['id'],
+                'title': st.session_state.event_subject,
+                'date': st.session_state.event_date.isoformat(),
+                'sub_events': [
+                    {
+                        'id': event['id'],
+                        'name': st.session_state.event_subject,
+                        'completed': False
+                    }
+                ]
+            }
+            updated_history['created_events'].append(new_event)
+            save_event_history(updated_history)
+
+            # Reset input fields
+            st.session_state.event_date = datetime.date.today()
+            st.session_state.event_time = datetime.time(9, 0)
+            st.session_state.study_duration = 60
+            st.session_state.event_subject = "Physics"
+            st.session_state.event_description = ""
+
+        except googleapiclient.errors.HttpError as error:
+            st.error(f"An error occurred: {error}")
+
+    st.sidebar.title('Reset Progress')
+    if st.sidebar.button("Reset All Progress"):
+        reset_progress()
 
 if __name__ == '__main__':
     main()
