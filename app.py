@@ -140,8 +140,6 @@ def render_progress_circle(event):
     
     return ' '.join(circle_parts)
 
-# Other imports and code...
-
 # Sorting function
 def sort_events(events, sort_option):
     if sort_option == "Title":
@@ -202,7 +200,7 @@ def main():
                 for sub_event in event['sub_events']:
                     sub_event_id = sub_event['id']
                     is_completed = sub_event['completed']
-                    event_name = sub_event['name']
+                    event_name = sub_event['name']  # Use description as the name
                     if is_completed:
                         event_name = f"~~{event_name}~~"
                     st.checkbox(event_name, value=is_completed, key=f"cb_{sub_event_id}", on_change=toggle_completion, args=(service, event_id, sub_event_id))
@@ -214,7 +212,7 @@ def main():
                         updated_history['created_events'] = [e for e in updated_history['created_events'] if e['id'] != event_id]
                         save_event_history(updated_history)
                         st.session_state['event_history'] = updated_history
-                        st.success(f"Deleted {event['title']} successfully!")
+                        st.sidebar.success(f"Deleted {event['title']} successfully!")
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while deleting event {event_id}: {error}")
 
@@ -232,7 +230,8 @@ def main():
             event_end = isoparse(event['end'].get('dateTime', event['end'].get('date')))
             event_duration = event_end - event_start
             event_summary = event.get('summary', 'No Title')
-            st.sidebar.write(f"**{event_summary}**")
+            event_description = event.get('description', '')
+            st.sidebar.write(f"**{event_description}**")  # Display description instead of summary
             st.sidebar.write(f"- Time: {event_start.strftime('%I:%M %p')} - {event_end.strftime('%I:%M %p')}")
             st.sidebar.write(f"- Duration: {event_duration}")
             st.sidebar.write("---")
@@ -318,7 +317,7 @@ def main():
 
                 new_event['sub_events'].append({
                     'id': event['id'],
-                    'name': event_body['summary'],
+                    'name': event_body['description'],  # Use description as the name
                     'completed': False
                 })
 
