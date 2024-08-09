@@ -234,8 +234,7 @@ def main():
             st.sidebar.write(f"- Duration: {event_duration}")
             st.sidebar.write("---")
 
-    # Left Sidebar for New Event Scheduler
-    st.sidebar.title('Schedule New Event')
+    
 
     if 'event_date' not in st.session_state:
         st.session_state.event_date = datetime.date.today()
@@ -339,9 +338,7 @@ def main():
             st.session_state.event_subject = "Physics"
             st.session_state.event_description = ""
 
-    st.sidebar.title('Reset Progress')
-    if st.sidebar.button("Reset All Progress"):
-        reset_progress()
+    
 
 if __name__ == '__main__':
     main()
