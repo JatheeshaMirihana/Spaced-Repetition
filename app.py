@@ -8,8 +8,6 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import googleapiclient.errors
-import google.auth.exceptions
-from dateutil.parser import isoparse
 import json
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly', 'https://www.googleapis.com/auth/calendar.events']
@@ -284,7 +282,7 @@ def main():
 
         new_event = {
             'id': new_event_id,  # Will be updated after creating the first event
-            'title': st.session_state.event_subject,
+            'title': st.session_state.event_description,  # Use description as the main title
             'date': st.session_state.event_date.isoformat(),
             'sub_events': []
         }
