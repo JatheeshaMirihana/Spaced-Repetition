@@ -88,13 +88,11 @@ def get_credentials():
 
             # After user authorizes, get the code from the URL
             if 'code' in st.experimental_get_query_params():
-                try:
-                    flow.fetch_token(code=st.experimental_get_query_params()['code'][0])
-                    creds = flow.credentials
-                    st.session_state['token'] = creds.to_json()  # Save the credentials as a JSON string
-                except Exception as e:
-                    st.error(f"An error occurred while fetching the token: {e}")
-                    creds = None
+                
+                flow.fetch_token(code=st.experimental_get_query_params()['code'][0])
+                creds = flow.credentials
+                st.session_state['token'] = creds.to_json()  # Save the credentials as a JSON string
+                
 
     return creds
 
