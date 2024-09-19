@@ -34,43 +34,44 @@ def get_credentials():
     creds = None
     if 'token' not in st.session_state:
         st.session_state['token'] = None
-    
+
     try:
         if st.session_state['token']:
             creds = Credentials.from_authorized_user_info(st.session_state['token'], SCOPES)
-        
+
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
-                # Use Streamlit secrets for credentials
-                client_config = {
-                    "web": {
-                        "client_id": st.secrets["client_id"],
-                        "client_secret": st.secrets["client_secret"],
-                        "redirect_uris": [st.secrets["redirect_uri"]],
-                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                        "token_uri": "https://oauth2.googleapis.com/token"
+                # Make sure st.secrets is correctly structured
+                if isinstance(st.secrets, dict) and 'client_id' in st.secrets and 'client_secret' in st.secrets:
+                    client_config = {
+                        "web": {
+                            "client_id": st.secrets["client_id"],
+                            "client_secret": st.secrets["client_secret"],
+                            "redirect_uris": [st.secrets["redirect_uri"]],
+                            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                            "token_uri": "https://oauth2.googleapis.com/token"
+                        }
                     }
-                }
-                
-                flow = Flow.from_client_config(client_config, SCOPES)  # Initialize OAuth flow
-                flow.redirect_uri = st.secrets["redirect_uri"]
-                
-                auth_url, _ = flow.authorization_url(prompt='consent')
-                st.markdown(f"[Click here to authorize]({auth_url})")
-                
-                # After user authorizes, get the code from the URL
-                if 'code' in st.experimental_get_query_params():
-                    flow.fetch_token(code=st.experimental_get_query_params()['code'][0])
-                    creds = flow.credentials
-                    st.session_state['token'] = creds.to_json()
-                    
-                return creds
+                    flow = Flow.from_client_config(client_config, SCOPES)
+                    flow.redirect_uri = st.secrets["redirect_uri"]
+
+                    auth_url, _ = flow.authorization_url(prompt='consent')
+                    st.markdown(f"[Click here to authorize]({auth_url})")
+
+                    if 'code' in st.experimental_get_query_params():
+                        flow.fetch_token(code=st.experimental_get_query_params()['code'][0])
+                        creds = flow.credentials
+                        st.session_state['token'] = creds.to_json()
+
+                else:
+                    st.error("Secrets are not properly structured. Please check your credentials.")
         return creds
     except Exception as e:
         st.error(f"An error occurred during authentication: {e}")
     return creds
+
 
 
 def get_existing_events(service, calendar_id='primary', time_min=None, time_max=None):
