@@ -30,24 +30,45 @@ def convert_to_sri_lanka_time(dt: datetime.datetime) -> datetime.datetime:
     sri_lanka_tz = pytz.timezone('Asia/Colombo')
     return dt.astimezone(sri_lanka_tz)
 
+import streamlit as st
+from google_auth_oauthlib.flow import Flow
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+import json
+
+SCOPES = ['https://www.googleapis.com/auth/calendar']  # Update with your scopes
+
 def get_credentials():
     creds = None
+
+    # Initialize token in session state if not present
     if 'token' not in st.session_state:
         st.session_state['token'] = None
 
-    
-        # Check if token exists and convert it from a JSON string to a dictionary
+    # Check if token exists and convert it from a JSON string to a dictionary
     if st.session_state['token']:
-        creds = Credentials.from_authorized_user_info(json.loads(st.session_state['token']), SCOPES)
+        try:
+            creds = Credentials.from_authorized_user_info(json.loads(st.session_state['token']), SCOPES)
 
-        # Refresh or initiate a new flow if creds are invalid or expired
+            # Refresh the credentials if they are expired
+            if creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+                st.session_state['token'] = creds.to_json()  # Update the token in session state
+        except Exception as e:
+            st.error(f"Error loading or refreshing credentials: {e}")
+            st.session_state['token'] = None
+
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
+            # Refresh the credentials if they are expired
+            try:
+                creds.refresh(Request())
+                st.session_state['token'] = creds.to_json()  # Update the token in session state
+            except Exception as e:
+                st.error(f"Error refreshing credentials: {e}")
+                st.session_state['token'] = None
         else:
-                # Debug: print st.secrets to verify its structure
-
-                # Use Streamlit secrets for credentials
+            # Use Streamlit secrets for credentials
             client_config = {
                 "web": {
                     "client_id": st.secrets["client_id"],
@@ -61,17 +82,22 @@ def get_credentials():
             flow = Flow.from_client_config(client_config, SCOPES)
             flow.redirect_uri = st.secrets["redirect_uri"]
 
+            # Create authorization URL and prompt the user to authorize
             auth_url, _ = flow.authorization_url(prompt='consent')
             st.markdown(f"[Click here to authorize]({auth_url})")
 
-                # After user authorizes, get the code from the URL
+            # After user authorizes, get the code from the URL
             if 'code' in st.experimental_get_query_params():
-                flow.fetch_token(code=st.experimental_get_query_params()['code'][0])
-                creds = flow.credentials
-                st.session_state['token'] = creds.to_json()  # Save the credentials as a JSON string
+                try:
+                    flow.fetch_token(code=st.experimental_get_query_params()['code'][0])
+                    creds = flow.credentials
+                    st.session_state['token'] = creds.to_json()  # Save the credentials as a JSON string
+                except Exception as e:
+                    st.error(f"An error occurred while fetching the token: {e}")
+                    creds = None
 
-            return creds
-        return creds
+    return creds
+
 
 
 
