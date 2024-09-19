@@ -5,7 +5,7 @@ import pytz
 import streamlit as st
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google_auth_oauthlib.flow import Flow  # <-- Added import here
 from googleapiclient.discovery import build
 import googleapiclient.errors
 import json
@@ -53,7 +53,7 @@ def get_credentials():
                     }
                 }
                 
-                flow = Flow.from_client_config(client_config, SCOPES)
+                flow = Flow.from_client_config(client_config, SCOPES)  # Initialize OAuth flow
                 flow.redirect_uri = st.secrets["redirect_uri"]
                 
                 auth_url, _ = flow.authorization_url(prompt='consent')
