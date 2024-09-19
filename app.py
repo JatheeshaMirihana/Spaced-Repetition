@@ -5,10 +5,11 @@ import pytz
 import streamlit as st
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import Flow  # <-- Added import here
+from google_auth_oauthlib.flow import Flow  # Ensure Flow is imported
 from googleapiclient.discovery import build
 import googleapiclient.errors
 import json
+from dateutil.parser import isoparse  # <-- Added import here
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly', 'https://www.googleapis.com/auth/calendar.events']
 
@@ -259,8 +260,6 @@ def main():
             st.sidebar.write(f"- Duration: {event_duration}")
             st.sidebar.write("---")
 
-    
-
     if 'event_date' not in st.session_state:
         st.session_state.event_date = datetime.date.today()
 
@@ -362,8 +361,6 @@ def main():
             st.session_state.study_duration = 60
             st.session_state.event_subject = "Physics"
             st.session_state.event_description = ""
-
-    
 
 if __name__ == '__main__':
     main()
