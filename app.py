@@ -67,6 +67,10 @@ def get_credentials():
 
                 else:
                     st.error("Secrets are not properly structured. Please check your credentials.")
+                    st.write(st.secrets["client_id"])  # Should print the client ID
+                    st.write(st.secrets["client_secret"])  # Should print the client secret
+                    st.write(st.secrets["redirect_uri"])  # Should print the redirect URI
+
         return creds
     except Exception as e:
         st.error(f"An error occurred during authentication: {e}")
