@@ -37,7 +37,6 @@ def get_credentials():
         if token:
             creds = Credentials.from_authorized_user_info(json.loads(token), SCOPES)
     
-    # Check if credentials are valid or expired
     if creds and creds.valid:
         return creds
     elif creds and creds.expired and creds.refresh_token:
@@ -47,8 +46,8 @@ def get_credentials():
             return creds
         except Exception as e:
             st.error(f"An error occurred during token refresh: {e}")
+            st.session_state.pop('token', None)
 
-    # No valid credentials available, initiate new authentication flow
     if 'code' in st.experimental_get_query_params():
         flow = Flow.from_client_config(
             client_config={
@@ -68,7 +67,6 @@ def get_credentials():
         st.session_state['token'] = creds.to_json()  # Save the credentials as a JSON string
         return creds
 
-    # Redirect to Google's OAuth 2.0 authorization page
     flow = Flow.from_client_config(
         client_config={
             "web": {
