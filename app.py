@@ -29,7 +29,6 @@ def get_color_id(subject: str) -> str:
 def convert_to_sri_lanka_time(dt: datetime.datetime) -> datetime.datetime:
     sri_lanka_tz = pytz.timezone('Asia/Colombo')
     return dt.astimezone(sri_lanka_tz)
-
 def get_credentials():
     creds = None
     if 'token' in st.session_state:
@@ -47,26 +46,30 @@ def get_credentials():
         except Exception as e:
             st.error(f"An error occurred during token refresh: {e}")
             st.session_state.pop('token', None)
-
+    
     if 'code' in st.experimental_get_query_params():
-        flow = Flow.from_client_config(
-            client_config={
-                "web": {
-                    "client_id": st.secrets["client_id"],
-                    "client_secret": st.secrets["client_secret"],
-                    "redirect_uris": [st.secrets["redirect_uri"]],
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token"
-                }
-            },
-            scopes=SCOPES
-        )
-        flow.redirect_uri = st.secrets["redirect_uri"]
-        flow.fetch_token(code=st.experimental_get_query_params()['code'][0])
-        creds = flow.credentials
-        st.session_state['token'] = creds.to_json()  # Save the credentials as a JSON string
-        return creds
-
+        try:
+            flow = Flow.from_client_config(
+                client_config={
+                    "web": {
+                        "client_id": st.secrets["client_id"],
+                        "client_secret": st.secrets["client_secret"],
+                        "redirect_uris": [st.secrets["redirect_uri"]],
+                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                        "token_uri": "https://oauth2.googleapis.com/token"
+                    }
+                },
+                scopes=SCOPES
+            )
+            flow.redirect_uri = st.secrets["redirect_uri"]
+            flow.fetch_token(code=st.experimental_get_query_params()['code'][0])
+            creds = flow.credentials
+            st.session_state['token'] = creds.to_json()  # Save the credentials as a JSON string
+            return creds
+        except Exception as e:
+            st.error(f"An error occurred while fetching the token: {e}")
+            return None
+    
     flow = Flow.from_client_config(
         client_config={
             "web": {
@@ -82,8 +85,8 @@ def get_credentials():
     flow.redirect_uri = st.secrets["redirect_uri"]
     auth_url, _ = flow.authorization_url(prompt='consent')
     st.markdown(f"[Click here to authorize]({auth_url})")
-
     return None
+
 
 def get_existing_events(service, calendar_id='primary', time_min=None, time_max=None):
     try:
