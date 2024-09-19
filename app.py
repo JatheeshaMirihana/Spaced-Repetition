@@ -168,6 +168,28 @@ def sort_events(events, sort_option):
     else:
         return events
 
+def create_event(service, title, description, start_datetime, end_datetime):
+    try:
+        event = {
+            'summary': title,
+            'description': description,
+            'start': {
+                'dateTime': start_datetime.isoformat(),
+                'timeZone': 'Asia/Colombo',
+            },
+            'end': {
+                'dateTime': end_datetime.isoformat(),
+                'timeZone': 'Asia/Colombo',
+            },
+        }
+
+        event = service.events().insert(calendarId='primary', body=event).execute()
+        st.success(f"Event created: {event['summary']} at {event['start']['dateTime']}")
+        return event
+    except googleapiclient.errors.HttpError as error:
+        st.error(f"An error occurred while creating the event: {error}")
+        return None
+
 def main():
     creds = get_credentials()
 
@@ -212,23 +234,59 @@ def main():
                 st.markdown(render_progress_circle(event), unsafe_allow_html=True)
                 for sub_event in event['sub_events']:
                     sub_event_id = sub_event['id']
-                    is_completed = sub_event['completed']
-                    event_name = sub_event['name']
-                    if is_completed:
-                        event_name = f"~~{event_name}~~"
-                    st.checkbox(event_name, value=is_completed, key=f"cb_{sub_event_id}", on_change=toggle_completion, args=(service, event_id, sub_event_id))
+                    if sub_event_id not in st.session_state.event_checkboxes:
+                        st.session_state.event_checkboxes[sub_event_id] = sub_event['completed']
+                    if st.checkbox(sub_event['title'], key=sub_event_id, value=st.session_state.event_checkboxes[sub_event_id]):
+                        if not st.session_state.event_checkboxes[sub_event_id]:
+                            toggle_completion(service, event_id, sub_event_id)
+                    else:
+                        if st.session_state.event_checkboxes[sub_event_id]:
+                            toggle_completion(service, event_id, sub_event_id)
             with col2:
-                if st.button("🗑️", key=f"delete_main_{event_id}"):
+                if st.button("❌", key=f"del-{event_id}"):
                     try:
-                        for sub_event in event['sub_events']:
-                            service.events().delete(calendarId='primary', eventId=sub_event['id']).execute()
-                        updated_history['created_events'] = [e for e in updated_history['created_events'] if e['id'] != event_id]
+                        service.events().delete(calendarId='primary', eventId=event_id).execute()
+                        st.success(f"Event {event_title} deleted.")
+                        updated_history['created_events'].remove(event)
                         save_event_history(updated_history)
                         st.session_state['event_history'] = updated_history
-                        st.sidebar.success(f"Deleted {event['title']} successfully!")
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while deleting the event: {error}")
-    
+
+    # Form to create new events
+    with st.form("Create Event"):
+        st.subheader("Create New Event")
+
+        event_title = st.text_input("Event Title")
+        event_description = st.text_area("Event Description")
+        start_date = st.date_input("Start Date", datetime.date.today())
+        start_time = st.time_input("Start Time", datetime.datetime.now().time())
+        end_date = st.date_input("End Date", datetime.date.today())
+        end_time = st.time_input("End Time", (datetime.datetime.now() + datetime.timedelta(hours=1)).time())
+
+        submit_button = st.form_submit_button("Create Event")
+
+        if submit_button:
+            start_datetime = datetime.datetime.combine(start_date, start_time)
+            end_datetime = datetime.datetime.combine(end_date, end_time)
+
+            event = create_event(service, event_title, event_description, start_datetime, end_datetime)
+
+            if event:
+                # Add the event to the session state and history
+                new_event = {
+                    'id': event['id'],
+                    'title': event_title,
+                    'sub_events': [{
+                        'id': event['id'],
+                        'title': event_title,
+                        'completed': False
+                    }]
+                }
+                updated_history['created_events'].append(new_event)
+                save_event_history(updated_history)
+                st.session_state['event_history'] = updated_history
+
     if st.sidebar.button("Reset Progress"):
         reset_progress()
 
