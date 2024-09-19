@@ -1,6 +1,5 @@
 from __future__ import print_function
 import datetime
-import os.path
 import pytz
 import streamlit as st
 from google.auth.transport.requests import Request
@@ -13,11 +12,6 @@ import os
 
 # Google Calendar API scopes
 SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly', 'https://www.googleapis.com/auth/calendar.events']
-
-# Google Calendar API credentials from Streamlit secrets
-CLIENT_ID = st.secrets["CLIENT_ID"]
-CLIENT_SECRET = st.secrets["CLIENT_SECRET"]
-REDIRECT_URI = st.secrets["REDIRECT_URI"]
 
 @st.cache_data
 def get_color_id(subject: str) -> str:
@@ -40,31 +34,52 @@ def get_credentials():
     creds = None
     if 'token' not in st.session_state:
         st.session_state['token'] = None
+    
     try:
         if st.session_state['token']:
             creds = Credentials.from_authorized_user_info(st.session_state['token'], SCOPES)
+        
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
-                flow = Flow.from_client_secrets_file('credentials.json', SCOPES)
-                flow.redirect_uri = REDIRECT_URI
+                # Use Streamlit secrets for credentials
+                client_config = {
+                    "web": {
+                        "client_id": st.secrets["client_id"],
+                        "client_secret": st.secrets["client_secret"],
+                        "redirect_uris": [st.secrets["redirect_uri"]],
+                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                        "token_uri": "https://oauth2.googleapis.com/token"
+                    }
+                }
+                
+                flow = Flow.from_client_config(client_config, SCOPES)
+                flow.redirect_uri = st.secrets["redirect_uri"]
+                
                 auth_url, _ = flow.authorization_url(prompt='consent')
                 st.markdown(f"[Click here to authorize]({auth_url})")
                 
-                # After user authorizes, get the code
+                # After user authorizes, get the code from the URL
                 if 'code' in st.experimental_get_query_params():
                     flow.fetch_token(code=st.experimental_get_query_params()['code'][0])
                     creds = flow.credentials
                     st.session_state['token'] = creds.to_json()
-                
+                    
                 return creds
         return creds
     except Exception as e:
         st.error(f"An error occurred during authentication: {e}")
     return creds
 
-# Function to retrieve event history
+def get_existing_events(service, calendar_id='primary', time_min=None, time_max=None):
+    try:
+        events_result = service.events().list(calendarId=calendar_id, timeMin=time_min, timeMax=time_max, singleEvents=True, orderBy='startTime').execute()
+        return events_result.get('items', [])
+    except googleapiclient.errors.HttpError as error:
+        st.error(f"An error occurred while fetching events: {error}")
+        return []
+
 def get_event_history():
     if os.path.exists('event_history.json'):
         with open('event_history.json', 'r') as file:
@@ -72,12 +87,10 @@ def get_event_history():
     else:
         return {'created_events': [], 'completed_events': [], 'missed_events': []}
 
-# Function to save event history
 def save_event_history(history):
     with open('event_history.json', 'w') as file:
         json.dump(history, file)
 
-# Function to verify existing events
 def verify_events(service, history):
     updated_history = {'created_events': [], 'completed_events': [], 'missed_events': []}
     for event in history['created_events']:
@@ -93,7 +106,6 @@ def verify_events(service, history):
             updated_history['missed_events'].append(event)
     return updated_history
 
-# Function to check if an event exists on Google Calendar
 def event_exists(service, event_id):
     try:
         service.events().get(calendarId='primary', eventId=event_id).execute()
@@ -101,7 +113,6 @@ def event_exists(service, event_id):
     except googleapiclient.errors.HttpError:
         return False
 
-# Function to reset progress of all events
 def reset_progress():
     updated_history = get_event_history()
     for event in updated_history['created_events']:
@@ -110,7 +121,6 @@ def reset_progress():
     save_event_history(updated_history)
     st.session_state['event_history'] = updated_history
 
-# Function to toggle event completion status
 def toggle_completion(service, event_id, sub_event_id):
     history = get_event_history()
     for event in history['created_events']:
@@ -135,7 +145,6 @@ def toggle_completion(service, event_id, sub_event_id):
                     st.session_state['event_history'] = history
                     return
 
-# Function to render progress circle based on completed events
 def render_progress_circle(event):
     total_sub_events = len(event['sub_events'])
     completed_sub_events = sum(1 for sub_event in event['sub_events'] if sub_event['completed'])
@@ -149,7 +158,6 @@ def render_progress_circle(event):
     
     return ' '.join(circle_parts)
 
-# Function to sort events
 def sort_events(events, sort_option):
     if sort_option == "Title":
         return sorted(events, key=lambda x: x['title'])
@@ -160,7 +168,6 @@ def sort_events(events, sort_option):
     else:
         return events
 
-# Main function to drive the Streamlit app
 def main():
     creds = get_credentials()
 
@@ -218,16 +225,9 @@ def main():
                         updated_history['created_events'] = [e for e in updated_history['created_events'] if e['id'] != event_id]
                         save_event_history(updated_history)
                         st.session_state['event_history'] = updated_history
-                        st.sidebar.success(f"Deleted {event['title']} successfully!")
+                        st.session_state.event_checkboxes.pop(event_id, None)
                     except googleapiclient.errors.HttpError as error:
-                        st.error(f"An error occurred while deleting event {event_id}: {error}")
-
-    selected_date = st.sidebar.date_input("Select a date to view events:")
-    selected_events = [event for event in updated_history['created_events'] if event['date'] == str(selected_date)]
-
-    st.write(f"Events for {selected_date}:")
-    for event in selected_events:
-        st.write(event['title'])
+                        st.error(f"An error occurred while deleting the event {event_id}: {error}")
 
 if __name__ == "__main__":
     main()
