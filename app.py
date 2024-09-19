@@ -32,46 +32,67 @@ def convert_to_sri_lanka_time(dt: datetime.datetime) -> datetime.datetime:
 
 def get_credentials():
     creds = None
-    if 'token' not in st.session_state:
-        st.session_state['token'] = None
-
     
-        # Check if token exists and convert it from a JSON string to a dictionary
-    if st.session_state['token']:
-        creds = Credentials.from_authorized_user_info(json.loads(st.session_state['token']), SCOPES)
+    if 'token' in st.session_state:
+        token = st.session_state['token']
+        if token:
+            try:
+                creds = Credentials.from_authorized_user_info(json.loads(token), SCOPES)
+            except Exception as e:
+                st.error(f"Error loading credentials: {e}")
 
-        # Refresh or initiate a new flow if creds are invalid or expired
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
+    if creds and creds.valid:
+        return creds
+    elif creds and creds.expired and creds.refresh_token:
+        try:
             creds.refresh(Request())
-        else:
-                # Debug: print st.secrets to verify its structure
-
-                # Use Streamlit secrets for credentials
-            client_config = {
-                "web": {
-                    "client_id": st.secrets["client_id"],
-                    "client_secret": st.secrets["client_secret"],
-                    "redirect_uris": [st.secrets["redirect_uri"]],
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token"
-                }
-            }
-
-            flow = Flow.from_client_config(client_config, SCOPES)
-            flow.redirect_uri = st.secrets["redirect_uri"]
-
-            auth_url, _ = flow.authorization_url(prompt='consent')
-            st.markdown(f"[Click here to authorize]({auth_url})")
-
-                # After user authorizes, get the code from the URL
-            if 'code' in st.experimental_get_query_params():
-                flow.fetch_token(code=st.experimental_get_query_params()['code'][0])
-                creds = flow.credentials
-                st.session_state['token'] = creds.to_json()  # Save the credentials as a JSON string
-
+            st.session_state['token'] = creds.to_json()
             return creds
-    return creds
+        except Exception as e:
+            st.error(f"An error occurred during token refresh: {e}")
+            st.session_state.pop('token', None)
+    
+    if 'code' in st.experimental_get_query_params():
+        try:
+            flow = Flow.from_client_config(
+                client_config={
+                    "web": {
+                        "client_id": st.secrets["client_id"],
+                        "client_secret": st.secrets["client_secret"],
+                        "redirect_uris": [st.secrets["redirect_uri"]],
+                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                        "token_uri": "https://oauth2.googleapis.com/token"
+                    }
+                },
+                scopes=SCOPES
+            )
+            flow.redirect_uri = st.secrets["redirect_uri"]
+            auth_code = st.experimental_get_query_params()['code'][0]
+            st.write(f"Received auth code: {auth_code}")  # Debug line
+            flow.fetch_token(code=auth_code)
+            creds = flow.credentials
+            st.session_state['token'] = creds.to_json()
+            return creds
+        except Exception as e:
+            st.error(f"An error occurred while fetching the token: {e}")
+            return None
+    
+    flow = Flow.from_client_config(
+        client_config={
+            "web": {
+                "client_id": st.secrets["client_id"],
+                "client_secret": st.secrets["client_secret"],
+                "redirect_uris": [st.secrets["redirect_uri"]],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token"
+            }
+        },
+        scopes=SCOPES
+    )
+    flow.redirect_uri = st.secrets["redirect_uri"]
+    auth_url, _ = flow.authorization_url(prompt='consent')
+    st.markdown(f"[Click here to authorize]({auth_url})")
+    return None
     
     
 
