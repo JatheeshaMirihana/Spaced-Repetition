@@ -36,13 +36,18 @@ def get_credentials():
         st.session_state['token'] = None
 
     try:
+        # Check if token exists and convert it from a JSON string to a dictionary
         if st.session_state['token']:
-            creds = Credentials.from_authorized_user_info(st.session_state['token'], SCOPES)
+            creds = Credentials.from_authorized_user_info(json.loads(st.session_state['token']), SCOPES)
 
+        # Refresh or initiate a new flow if creds are invalid or expired
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
             else:
+                # Debug: print st.secrets to verify its structure
+                st.write(st.secrets)
+
                 # Use Streamlit secrets for credentials
                 client_config = {
                     "web": {
@@ -64,7 +69,7 @@ def get_credentials():
                 if 'code' in st.experimental_get_query_params():
                     flow.fetch_token(code=st.experimental_get_query_params()['code'][0])
                     creds = flow.credentials
-                    st.session_state['token'] = creds.to_json()
+                    st.session_state['token'] = creds.to_json()  # Save the credentials as a JSON string
 
                 return creds
         return creds
