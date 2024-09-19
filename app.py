@@ -31,22 +31,29 @@ def convert_to_sri_lanka_time(dt: datetime.datetime) -> datetime.datetime:
     return dt.astimezone(sri_lanka_tz)
 def get_credentials():
     creds = None
+    
+    # Check if credentials are stored in session state
     if 'token' in st.session_state:
         token = st.session_state['token']
         if token:
-            creds = Credentials.from_authorized_user_info(json.loads(token), SCOPES)
-    
+            try:
+                creds = Credentials.from_authorized_user_info(json.loads(token), SCOPES)
+            except Exception as e:
+                st.error(f"Error loading credentials: {e}")
+
+    # If credentials are valid, return them
     if creds and creds.valid:
         return creds
     elif creds and creds.expired and creds.refresh_token:
         try:
             creds.refresh(Request())
-            st.session_state['token'] = creds.to_json()  # Update the session token
+            st.session_state['token'] = creds.to_json()  # Update session token
             return creds
         except Exception as e:
             st.error(f"An error occurred during token refresh: {e}")
             st.session_state.pop('token', None)
     
+    # Handle authorization code flow
     if 'code' in st.experimental_get_query_params():
         try:
             flow = Flow.from_client_config(
@@ -62,14 +69,16 @@ def get_credentials():
                 scopes=SCOPES
             )
             flow.redirect_uri = st.secrets["redirect_uri"]
-            flow.fetch_token(code=st.experimental_get_query_params()['code'][0])
+            auth_code = st.experimental_get_query_params()['code'][0]
+            flow.fetch_token(code=auth_code)
             creds = flow.credentials
-            st.session_state['token'] = creds.to_json()  # Save the credentials as a JSON string
+            st.session_state['token'] = creds.to_json()  # Save credentials
             return creds
         except Exception as e:
             st.error(f"An error occurred while fetching the token: {e}")
             return None
     
+    # If no authorization code, start the authorization flow
     flow = Flow.from_client_config(
         client_config={
             "web": {
@@ -86,6 +95,7 @@ def get_credentials():
     auth_url, _ = flow.authorization_url(prompt='consent')
     st.markdown(f"[Click here to authorize]({auth_url})")
     return None
+
 
 
 def get_existing_events(service, calendar_id='primary', time_min=None, time_max=None):
