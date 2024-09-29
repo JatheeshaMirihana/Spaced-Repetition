@@ -32,6 +32,7 @@ def convert_to_sri_lanka_time(dt: datetime.datetime) -> datetime.datetime:
     return dt.astimezone(sri_lanka_tz)
 
 
+
 def get_credentials():
     cookies = CookieManager()
     creds = None
@@ -71,11 +72,12 @@ def get_credentials():
                     code = st.experimental_get_query_params()['code'][0]
                     flow.fetch_token(code=code)
                     creds = flow.credentials
-                    cookies.set("token", creds.to_json(), max_age=3600)  # Save the credentials as a JSON string in cookies
+                    cookies.set_cookie("token", creds.to_json(), max_age=3600)  # Save the credentials as a JSON string in cookies
                 except Exception as e:
                     st.error(f"Error fetching token: {e}")
 
     return creds
+
 
 
 
