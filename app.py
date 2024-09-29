@@ -10,6 +10,7 @@ from googleapiclient.discovery import build
 import googleapiclient.errors
 import json
 from dateutil.parser import isoparse  # <-- Added import here
+from streamlit_cookies_manager import CookieManager
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly', 'https://www.googleapis.com/auth/calendar.events']
 
@@ -30,24 +31,14 @@ def convert_to_sri_lanka_time(dt: datetime.datetime) -> datetime.datetime:
     sri_lanka_tz = pytz.timezone('Asia/Colombo')
     return dt.astimezone(sri_lanka_tz)
 
-from google_auth_oauthlib.flow import Flow
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
-import json
-import streamlit as st
-
-SCOPES = ['https://www.googleapis.com/auth/calendar']  # Define your scopes here
 
 def get_credentials():
+    cookies = CookieManager()
     creds = None
     
-    # Initialize token in session state if not present
-    if 'token' not in st.session_state:
-        st.session_state['token'] = None
-
-    # Check if token exists and convert it from a JSON string to a dictionary
-    if st.session_state['token']:
-        creds = Credentials.from_authorized_user_info(json.loads(st.session_state['token']), SCOPES)
+    # Check if token exists in cookies
+    if cookies.get("token"):
+        creds = Credentials.from_authorized_user_info(json.loads(cookies.get("token")), SCOPES)
     
     # Refresh or initiate a new flow if creds are invalid or expired
     if not creds or not creds.valid:
@@ -80,11 +71,12 @@ def get_credentials():
                     code = st.experimental_get_query_params()['code'][0]
                     flow.fetch_token(code=code)
                     creds = flow.credentials
-                    st.session_state['token'] = creds.to_json()  # Save the credentials as a JSON string
+                    cookies.set("token", creds.to_json(), max_age=3600)  # Save the credentials as a JSON string in cookies
                 except Exception as e:
                     st.error(f"Error fetching token: {e}")
 
     return creds
+
 
 
 
