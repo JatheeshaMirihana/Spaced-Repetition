@@ -78,6 +78,37 @@ def get_credentials():
 
     return creds
 
+# Create new spaced-repetition events
+def create_events(service, subject, start_time, duration, description):
+    intervals = [1, 3, 7, 14, 30, 60, 90]  # Spaced repetition intervals in days
+    event_ids = []
+    
+    for i, interval in enumerate(intervals):
+        event_time = start_time + datetime.timedelta(days=interval)
+        event = {
+            'summary': f'{subject} Study Session - {i+1}',
+            'description': description,
+            'start': {
+                'dateTime': event_time.isoformat(),
+                'timeZone': 'Asia/Colombo',
+            },
+            'end': {
+                'dateTime': (event_time + datetime.timedelta(minutes=duration)).isoformat(),
+                'timeZone': 'Asia/Colombo',
+            },
+            'colorId': get_color_id(subject),
+        }
+        
+        try:
+            created_event = service.events().insert(calendarId='primary', body=event).execute()
+            event_ids.append(created_event['id'])
+            st.success(f"Event {i+1} created: {created_event['htmlLink']}")
+        except googleapiclient.errors.HttpError as error:
+            st.error(f"An error occurred: {error}")
+            break
+    
+    return event_ids
+
 # Retrieve existing events from the Google Calendar
 def get_existing_events(service, calendar_id='primary', time_min=None, time_max=None):
     try:
@@ -87,102 +118,7 @@ def get_existing_events(service, calendar_id='primary', time_min=None, time_max=
         st.error(f"An error occurred while fetching events: {error}")
         return []
 
-# Get event history from a JSON file
-def get_event_history():
-    if os.path.exists('event_history.json'):
-        with open('event_history.json', 'r') as file:
-            return json.load(file)
-    else:
-        return {'created_events': [], 'completed_events': [], 'missed_events': []}
-
-# Save event history to a JSON file
-def save_event_history(history):
-    with open('event_history.json', 'w') as file:
-        json.dump(history, file)
-
-# Verify existing events in Google Calendar with the saved history
-def verify_events(service, history):
-    updated_history = {'created_events': [], 'completed_events': [], 'missed_events': []}
-    for event in history['created_events']:
-        if event_exists(service, event['id']):
-            updated_history['created_events'].append(event)
-        else:
-            st.session_state.event_checkboxes.pop(event['id'], None)
-    for event in history['completed_events']:
-        if event_exists(service, event['id']):
-            updated_history['completed_events'].append(event)
-    for event in history['missed_events']:
-        if event_exists(service, event['id']):
-            updated_history['missed_events'].append(event)
-    return updated_history
-
-# Check if a specific event exists on Google Calendar
-def event_exists(service, event_id):
-    try:
-        service.events().get(calendarId='primary', eventId=event_id).execute()
-        return True
-    except googleapiclient.errors.HttpError:
-        return False
-
-# Function to reset progress in event history
-def reset_progress():
-    updated_history = get_event_history()
-    for event in updated_history['created_events']:
-        for sub_event in event['sub_events']:
-            sub_event['completed'] = False
-    save_event_history(updated_history)
-    st.session_state['event_history'] = updated_history
-
-# Function to toggle the completion status of a study sub-event
-def toggle_completion(service, event_id, sub_event_id):
-    history = get_event_history()
-    for event in history['created_events']:
-        if event['id'] == event_id:
-            for sub_event in event['sub_events']:
-                if sub_event['id'] == sub_event_id:
-                    sub_event['completed'] = not sub_event['completed']
-                    try:
-                        calendar_event = service.events().get(calendarId='primary', eventId=sub_event_id).execute()
-                        if 'originalColorId' not in sub_event:
-                            sub_event['originalColorId'] = calendar_event.get('colorId', '1')
-                        if sub_event['completed']:
-                            calendar_event['summary'] = f"Completed: {calendar_event['summary']}"
-                            calendar_event['colorId'] = '8'  # Graphite
-                        else:
-                            calendar_event['summary'] = calendar_event['summary'].replace("Completed: ", "")
-                            calendar_event['colorId'] = sub_event['originalColorId']
-                        service.events().update(calendarId='primary', eventId=sub_event_id, body=calendar_event).execute()
-                    except googleapiclient.errors.HttpError as error:
-                        st.error(f"An error occurred while updating event {sub_event_id}: {error}")
-                    save_event_history(history)
-                    st.session_state['event_history'] = history
-                    return
-
-# Render the progress of an event as filled/unfilled circles
-def render_progress_circle(event):
-    total_sub_events = len(event['sub_events'])
-    completed_sub_events = sum(1 for sub_event in event['sub_events'] if sub_event['completed'])
-    
-    circle_parts = []
-    for i in range(total_sub_events):
-        if i < completed_sub_events:
-            circle_parts.append('<span style="color:green;">&#9679;</span>')  # filled circle
-        else:
-            circle_parts.append('<span style="color:lightgrey;">&#9675;</span>')  # unfilled circle
-    
-    return ' '.join(circle_parts)
-
-# Sorting function to sort events
-def sort_events(events, sort_option):
-    if sort_option == "Title":
-        return sorted(events, key=lambda x: x['title'])
-    elif sort_option == "Date":
-        return sorted(events, key=lambda x: x['date'])
-    elif sort_option == "Completion":
-        return sorted(events, key=lambda x: sum(1 for sub_event in x['sub_events'] if sub_event['completed']), reverse=True)
-    else:
-        return events
-
+# Main function to display the form and allow user to create events
 def main():
     creds = get_credentials()
 
@@ -198,46 +134,21 @@ def main():
 
     st.title('Google Calendar Event Scheduler')
 
-    # Load or verify event history
-    if 'event_history' not in st.session_state:
-        history = get_event_history()
-        updated_history = verify_events(service, history)
-        if history != updated_history:
-            save_event_history(updated_history)
-        st.session_state['event_history'] = updated_history
-    else:
-        updated_history = st.session_state['event_history']
+    st.header("Schedule New Study Sessions")
 
-    # Right Sidebar for Progress Tracker
-    st.sidebar.title('Your Progress')
+    with st.form(key='event_form'):
+        subject = st.selectbox("Subject", ["Physics", "Combined Maths", "Chemistry"])
+        start_date = st.date_input("Start Date", datetime.date.today())
+        start_time = st.time_input("Start Time", datetime.datetime.now().time())
+        duration = st.number_input("Duration (in minutes)", min_value=1, max_value=180, value=60)
+        description = st.text_area("Description", "Enter details about your study session")
+        
+        submit_button = st.form_submit_button(label='Schedule Events')
 
-    # Add sorting dropdown
-    sort_option = st.sidebar.selectbox("Sort by:", ["Title", "Date", "Completion"], index=0)
-
-    if 'event_checkboxes' not in st.session_state:
-        st.session_state.event_checkboxes = {}
-
-    # Sort events based on selected option
-    sorted_events = sort_events(updated_history['created_events'], sort_option)
-
-    for event in sorted_events:
-        event_id = event['id']
-        event_title = event['title']
-        if len(event_title) > 20:
-            event_title = event_title[:17] + "..."
-        with st.sidebar.expander(f"{event_title}"):
-            col1, col2 = st.columns([8, 1])
-            with col1:
-                st.markdown(render_progress_circle(event), unsafe_allow_html=True)
-                for sub_event in event['sub_events']:
-                    sub_event_id = sub_event['id']
-                    checkbox_key = f"{event_id}-{sub_event_id}"
-                    is_checked = st.session_state.event_checkboxes.get(checkbox_key, sub_event['completed'])
-                    st.session_state.event_checkboxes[checkbox_key] = st.checkbox(sub_event['title'], value=is_checked, key=checkbox_key)
-                    if st.session_state.event_checkboxes[checkbox_key] != sub_event['completed']:
-                        toggle_completion(service, event_id, sub_event_id)
-            with col2:
-                st.button('↻', on_click=reset_progress)
+        if submit_button:
+            start_datetime = datetime.datetime.combine(start_date, start_time)
+            start_datetime = convert_to_sri_lanka_time(start_datetime)
+            create_events(service, subject, start_datetime, duration, description)
 
 if __name__ == '__main__':
     main()
