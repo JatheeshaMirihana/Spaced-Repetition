@@ -8,6 +8,10 @@ from googleapiclient.discovery import build
 import googleapiclient.errors
 import json
 from dateutil.parser import isoparse
+import streamlit_cookies_manager  # Cookie manager for storing credentials
+
+# Initialize cookies
+cookies = streamlit_cookies_manager.CookieManager()
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly', 'https://www.googleapis.com/auth/calendar.events']
 
@@ -28,14 +32,14 @@ def convert_to_sri_lanka_time(dt: datetime.datetime) -> datetime.datetime:
 
 def get_credentials():
     creds = None
-    
-    # Initialize token in session state if not present
-    if 'token' not in st.session_state:
-        st.session_state['token'] = None
 
-    # Check if token exists and convert it from a JSON string to a dictionary
-    if st.session_state['token']:
-        creds = Credentials.from_authorized_user_info(json.loads(st.session_state['token']), SCOPES)
+    # Load cookies from browser
+    cookies.load()
+
+    # Check if the cookie with stored credentials exists
+    if cookies.get('google_token'):
+        creds_info = json.loads(cookies.get('google_token'))
+        creds = Credentials.from_authorized_user_info(creds_info, SCOPES)
     
     # Refresh or initiate a new flow if creds are invalid or expired
     if not creds or not creds.valid:
@@ -73,8 +77,9 @@ def get_credentials():
                     flow.fetch_token(code=code)
                     creds = flow.credentials
         
-                    # Save the credentials in session state
-                    st.session_state['token'] = creds.to_json()
+                    # Save the credentials in a cookie
+                    cookies.set('google_token', creds.to_json(), max_age=3600 * 24 * 30)  # Store for 30 days
+                    cookies.save()  # Save cookies in the browser
         
                     # Clear the query parameters to prevent reusing the code
                     st.experimental_set_query_params()  # Clears the 'code' from the URL
@@ -83,8 +88,6 @@ def get_credentials():
 
                 except Exception as e:
                     st.error(f"Error fetching token: {e}")
-
-
 
     return creds
 
