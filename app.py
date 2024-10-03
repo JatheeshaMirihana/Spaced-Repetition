@@ -33,6 +33,11 @@ def convert_to_sri_lanka_time(dt: datetime.datetime) -> datetime.datetime:
 def get_credentials():
     creds = None
     
+    # Ensure cookies are ready before accessing
+    if not cookies.ready():
+        st.warning("Cookies are not ready yet, please wait...")
+        st.stop()  # Stop the script until cookies are ready
+
     # Check if the cookie with stored credentials exists
     cookie_token = cookies.get('google_token')
     
@@ -46,6 +51,7 @@ def get_credentials():
                 creds.refresh(Request())
                 # Save the refreshed token back to cookies
                 cookies.set('google_token', creds.to_json())
+                cookies.save()  # Ensure the cookies are saved
             except Exception as e:
                 st.error(f"Error refreshing credentials: {e}")
                 creds = None
@@ -66,16 +72,18 @@ def get_credentials():
             auth_url, _ = flow.authorization_url(prompt='consent')
             st.markdown(f"[Click here to authorize]({auth_url})")
 
+            # Use st.query_params() to fetch the authorization code
+            code = st.query_params.get('code', [None])[0]
+
             # After user authorizes, get the code from the URL and fetch the token
-            if 'code' in st.experimental_get_query_params():
+            if code:
                 try:
-                    code = st.experimental_get_query_params()['code'][0]
                     flow.fetch_token(code=code)
                     creds = flow.credentials
 
                     # Save the credentials in cookies
                     cookies.set('google_token', creds.to_json())
-                    cookies.save()  # Ensure the cookies are saved
+                    cookies.save()  # Ensure cookies are saved
 
                     # Clear the query parameters to prevent reusing the code
                     st.experimental_set_query_params()
@@ -86,6 +94,7 @@ def get_credentials():
                     st.error(f"Error fetching token: {e}")
 
     return creds
+
 
 
 def get_existing_events(service, calendar_id='primary', time_min=None, time_max=None):
