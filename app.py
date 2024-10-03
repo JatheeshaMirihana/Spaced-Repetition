@@ -32,20 +32,20 @@ def convert_to_sri_lanka_time(dt: datetime.datetime) -> datetime.datetime:
 
 def get_credentials():
     creds = None
-
-    # Load cookies from browser
-    cookies.load()
-
-    # Check if the cookie with stored credentials exists
-    if cookies.get('google_token'):
-        creds_info = json.loads(cookies.get('google_token'))
-        creds = Credentials.from_authorized_user_info(creds_info, SCOPES)
     
+    # Check if the cookie with stored credentials exists
+    cookie_token = cookies.get('google_token')
+    
+    if cookie_token:
+        creds = Credentials.from_authorized_user_info(json.loads(cookie_token), SCOPES)
+
     # Refresh or initiate a new flow if creds are invalid or expired
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
+                # Save the refreshed token back to cookies
+                cookies.set('google_token', creds.to_json())
             except Exception as e:
                 st.error(f"Error refreshing credentials: {e}")
                 creds = None
@@ -67,22 +67,18 @@ def get_credentials():
             st.markdown(f"[Click here to authorize]({auth_url})")
 
             # After user authorizes, get the code from the URL and fetch the token
-            code = st.experimental_get_query_params().get('code')
             if 'code' in st.experimental_get_query_params():
                 try:
-                    # Fetch authorization code
                     code = st.experimental_get_query_params()['code'][0]
-        
-                    # Exchange code for tokens
                     flow.fetch_token(code=code)
                     creds = flow.credentials
-        
-                    # Save the credentials in a cookie
-                    cookies.set('google_token', creds.to_json(), max_age=3600 * 24 * 30)  # Store for 30 days
-                    cookies.save()  # Save cookies in the browser
-        
+
+                    # Save the credentials in cookies
+                    cookies.set('google_token', creds.to_json())
+                    cookies.save()  # Ensure the cookies are saved
+
                     # Clear the query parameters to prevent reusing the code
-                    st.experimental_set_query_params()  # Clears the 'code' from the URL
+                    st.experimental_set_query_params()
 
                     st.success("Authorization successful! You can now proceed.")
 
@@ -90,6 +86,7 @@ def get_credentials():
                     st.error(f"Error fetching token: {e}")
 
     return creds
+
 
 def get_existing_events(service, calendar_id='primary', time_min=None, time_max=None):
     try:
