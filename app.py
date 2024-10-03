@@ -56,6 +56,7 @@ def get_credentials():
                 st.error(f"Error refreshing credentials: {e}")
                 creds = None
         else:
+            # Google OAuth 2.0 client configuration
             client_config = {
                 "web": {
                     "client_id": st.secrets["client_id"],
@@ -69,13 +70,14 @@ def get_credentials():
             flow = Flow.from_client_config(client_config, SCOPES)
             flow.redirect_uri = st.secrets["redirect_uri"]
 
-            auth_url, _ = flow.authorization_url(prompt='consent')
+            # Generate authorization URL
+            auth_url, _ = flow.authorization_url(prompt='consent', include_granted_scopes='true')
             st.markdown(f"[Click here to authorize]({auth_url})")
 
-            # Use st.query_params() to fetch the authorization code
+            # Fetch the authorization code from the query parameters
             code = st.query_params.get('code', [None])[0]
 
-            # After user authorizes, get the code from the URL and fetch the token
+            # Proceed if we have the code
             if code:
                 try:
                     flow.fetch_token(code=code)
@@ -92,8 +94,10 @@ def get_credentials():
 
                 except Exception as e:
                     st.error(f"Error fetching token: {e}")
+                    st.experimental_set_query_params()  # Clear the query params even if error happens
 
     return creds
+
 
 
 
