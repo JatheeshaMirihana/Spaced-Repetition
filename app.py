@@ -3,15 +3,11 @@ import pytz
 import streamlit as st
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import Flow  # Ensure Flow is imported
+from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 import googleapiclient.errors
 import json
 from dateutil.parser import isoparse
-import streamlit_cookies_manager  # Cookie manager for storing credentials
-
-# Initialize cookies
-cookies = streamlit_cookies_manager.CookieManager()
 
 SCOPES = ['https://www.googleapis.com/auth/calendar.events.readonly', 'https://www.googleapis.com/auth/calendar.events']
 
@@ -33,30 +29,23 @@ def convert_to_sri_lanka_time(dt: datetime.datetime) -> datetime.datetime:
 def get_credentials():
     creds = None
     
-    # Ensure cookies are ready before accessing
-    if not cookies.ready():
-        st.warning("Cookies are not ready yet, please wait...")
-        st.stop()  # Stop the script until cookies are ready
+    # Initialize token in session state if not present
+    if 'token' not in st.session_state:
+        st.session_state['token'] = None
 
-    # Check if the cookie with stored credentials exists
-    cookie_token = cookies.get('google_token')
+    # Check if token exists and convert it from a JSON string to a dictionary
+    if st.session_state['token']:
+        creds = Credentials.from_authorized_user_info(json.loads(st.session_state['token']), SCOPES)
     
-    if cookie_token:
-        creds = Credentials.from_authorized_user_info(json.loads(cookie_token), SCOPES)
-
     # Refresh or initiate a new flow if creds are invalid or expired
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             try:
                 creds.refresh(Request())
-                # Save the refreshed token back to cookies
-                cookies.set('google_token', creds.to_json())
-                cookies.save()  # Ensure the cookies are saved
             except Exception as e:
                 st.error(f"Error refreshing credentials: {e}")
                 creds = None
         else:
-            # Google OAuth 2.0 client configuration
             client_config = {
                 "web": {
                     "client_id": st.secrets["client_id"],
@@ -70,36 +59,32 @@ def get_credentials():
             flow = Flow.from_client_config(client_config, SCOPES)
             flow.redirect_uri = st.secrets["redirect_uri"]
 
-            # Generate authorization URL
-            auth_url, _ = flow.authorization_url(prompt='consent', include_granted_scopes='true')
+            auth_url, _ = flow.authorization_url(prompt='consent')
             st.markdown(f"[Click here to authorize]({auth_url})")
 
-            # Fetch the authorization code from the query parameters
-            code = st.query_params.get('code', [None])[0]
-
-            # Proceed if we have the code
-            if code:
+            # After user authorizes, get the code from the URL and fetch the token
+            code = st.experimental_get_query_params().get('code')
+            if 'code' in st.experimental_get_query_params():
                 try:
+                    # Fetch authorization code
+                    code = st.experimental_get_query_params()['code'][0]
+        
+                    # Exchange code for tokens
                     flow.fetch_token(code=code)
                     creds = flow.credentials
-
-                    # Save the credentials in cookies
-                    cookies.set('google_token', creds.to_json())
-                    cookies.save()  # Ensure cookies are saved
-
+        
+                    # Save the credentials in session state
+                    st.session_state['token'] = creds.to_json()
+        
                     # Clear the query parameters to prevent reusing the code
-                    st.experimental_set_query_params()
+                    st.experimental_set_query_params()  # Clears the 'code' from the URL
 
                     st.success("Authorization successful! You can now proceed.")
 
                 except Exception as e:
                     st.error(f"Error fetching token: {e}")
-                    st.experimental_set_query_params()  # Clear the query params even if error happens
 
     return creds
-
-
-
 
 def get_existing_events(service, calendar_id='primary', time_min=None, time_max=None):
     try:
@@ -121,7 +106,6 @@ def verify_events(service, history):
             updated_history['created_events'].append(event)
     return updated_history
 
-# Function to check if event exists on Google Calendar
 def event_exists(service, event_id):
     try:
         service.events().get(calendarId='primary', eventId=event_id).execute()
@@ -136,7 +120,6 @@ def toggle_completion(service, event_id, sub_event_id):
             for sub_event in event['sub_events']:
                 if sub_event['id'] == sub_event_id:
                     sub_event['completed'] = not sub_event['completed']
-                    # Update Google Calendar event
                     try:
                         calendar_event = service.events().get(calendarId='primary', eventId=sub_event_id).execute()
                         if 'originalColorId' not in sub_event:
@@ -152,7 +135,6 @@ def toggle_completion(service, event_id, sub_event_id):
                         service.events().update(calendarId='primary', eventId=sub_event_id, body=calendar_event).execute()
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while updating event {sub_event_id}: {error}")
-                    # Update session state directly
                     st.session_state['event_history'] = history
                     return
 
@@ -163,13 +145,12 @@ def render_progress_circle(event):
     circle_parts = []
     for i in range(total_sub_events):
         if i < completed_sub_events:
-            circle_parts.append('<span style="color:green;">&#9679;</span>')  # filled circle part
+            circle_parts.append('<span style="color:green;">&#9679;</span>')
         else:
-            circle_parts.append('<span style="color:lightgrey;">&#9675;</span>')  # unfilled circle part
+            circle_parts.append('<span style="color:lightgrey;">&#9675;</span>')
     
     return ' '.join(circle_parts)
 
-# Sorting function
 def sort_events(events, sort_option):
     if sort_option == "Title":
         return sorted(events, key=lambda x: x['title'])
@@ -195,24 +176,17 @@ def main():
 
     st.title('Google Calendar Event Scheduler')
 
-    # Load or verify event history
     if 'event_history' not in st.session_state:
         history = {'created_events': []}
         st.session_state['event_history'] = history
     else:
         history = st.session_state['event_history']
 
-    # Verify events
     updated_history = verify_events(service, history)
     st.session_state['event_history'] = updated_history
 
-    # Right Sidebar for Progress Tracker
     st.sidebar.title('Your Progress')
-
-    # Add sorting dropdown
     sort_option = st.sidebar.selectbox("Sort by:", ["Title", "Date", "Completion"], index=0)
-
-    # Sort events based on selected option
     sorted_events = sort_events(updated_history['created_events'], sort_option)
 
     for event in sorted_events:
@@ -227,7 +201,7 @@ def main():
                 for sub_event in event['sub_events']:
                     sub_event_id = sub_event['id']
                     is_completed = sub_event['completed']
-                    event_name = sub_event['name']  # Use description as the name
+                    event_name = sub_event['name']
                     if is_completed:
                         event_name = f"~~{event_name}~~"
                     st.checkbox(
@@ -248,134 +222,19 @@ def main():
                     except googleapiclient.errors.HttpError as error:
                         st.error(f"An error occurred while deleting event {event_id}: {error}")
 
-    # Display events from selected date
     selected_date = st.sidebar.date_input("Select a date to view events:")
     tz = pytz.timezone('Asia/Colombo')
     time_min = tz.localize(datetime.datetime.combine(selected_date, datetime.time.min)).isoformat()
     time_max = tz.localize(datetime.datetime.combine(selected_date, datetime.time.max)).isoformat()
+
     existing_events = get_existing_events(service, time_min=time_min, time_max=time_max)
 
-    if not existing_events:
-        st.sidebar.write("No events found.")
-    else:
+    if existing_events:
+        st.write(f"Events on {selected_date}:")
         for event in existing_events:
-            event_start = isoparse(event['start'].get('dateTime', event['start'].get('date')))
-            event_end = isoparse(event['end'].get('dateTime', event['end'].get('date')))
-            event_duration = event_end - event_start
-            event_summary = event.get('summary', 'No Title')
-            event_description = event.get('description', '')
-            st.sidebar.write(f"**{event_description}**")  # Display description instead of summary
-            st.sidebar.write(f"- Time: {event_start.strftime('%I:%M %p')} - {event_end.strftime('%I:%M %p')}")
-            st.sidebar.write(f"- Duration: {event_duration}")
-            st.sidebar.write("---")
+            st.write(f"- {event['summary']}")
+    else:
+        st.write(f"No events found on {selected_date}.")
 
-    # Initialize default values
-    if 'event_date' not in st.session_state:
-        st.session_state.event_date = datetime.date.today()
-
-    if 'event_time' not in st.session_state:
-        st.session_state.event_time = datetime.time(9, 0)
-
-    if 'study_duration' not in st.session_state:
-        st.session_state.study_duration = 60  # Default to 60 minutes
-
-    if 'event_subject' not in st.session_state:
-        st.session_state.event_subject = "Physics"  # Default to 'Physics'
-
-    if 'event_description' not in st.session_state:
-        st.session_state.event_description = ""
-
-    subjects = ["Physics", "Chemistry", "Combined Maths"]  # List of subjects
-
-    event_date = st.date_input("Enter the date you first studied the topic:", value=st.session_state.event_date)
-    event_time = st.time_input("Enter the time you first studied the topic:", value=st.session_state.event_time)
-    study_duration = st.number_input("Enter the duration of your study session (in minutes):", min_value=1, value=st.session_state.study_duration)
-    event_subject = st.selectbox("Select your subject:", subjects, index=subjects.index(st.session_state.event_subject))
-    event_description = st.text_area("Enter a description for the study session:", value=st.session_state.event_description)
-
-    # Update session state with current values
-    st.session_state.event_date = event_date
-    st.session_state.event_time = event_time
-    st.session_state.study_duration = study_duration
-    st.session_state.event_subject = event_subject
-    st.session_state.event_description = event_description
-
-    intervals = [1, 3, 7, 16, 30, 90, 180]  # Days for review intervals
-    interval_actions = {
-        1: 'Review notes',
-        3: 'Revise key concepts',
-        7: 'Revise thoroughly',
-        16: 'Solve problems',
-        30: 'Revise again',
-        90: 'Test yourself',
-        180: 'Deep review',
-    }
-
-    if st.button("Schedule Event"):
-        start_datetime_naive = datetime.datetime.combine(event_date, event_time)
-        tz = pytz.timezone('Asia/Colombo')
-        start_datetime = tz.localize(start_datetime_naive)
-        end_datetime = start_datetime + datetime.timedelta(minutes=study_duration)
-        new_event_id = None  # ID for the main event to group sub-events
-
-        new_event = {
-            'id': new_event_id,  # Will be updated after creating the first event
-            'title': event_description,  # Use description as the main title
-            'date': event_date.isoformat(),
-            'sub_events': []
-        }
-
-        all_events_created = True
-
-        for days in intervals:
-            review_date = start_datetime + datetime.timedelta(days=days)
-            review_end_datetime = review_date + datetime.timedelta(minutes=study_duration)
-
-            event_body = {
-                'summary': f"Day {days}: {interval_actions[days]}",
-                'description': event_description,
-                'start': {
-                    'dateTime': review_date.isoformat(),
-                    'timeZone': 'Asia/Colombo',
-                },
-                'end': {
-                    'dateTime': review_end_datetime.isoformat(),
-                    'timeZone': 'Asia/Colombo',
-                },
-                'colorId': get_color_id(event_subject),
-            }
-
-            try:
-                event_response = service.events().insert(calendarId='primary', body=event_body).execute()
-                if new_event_id is None:
-                    new_event_id = event_response['id']
-                    new_event['id'] = new_event_id  # Update the main event ID after the first event is created
-
-                new_event['sub_events'].append({
-                    'id': event_response['id'],
-                    'name': f"Day {days}: {interval_actions[days]}",  # Set subtitle as "Day X: [Action]"
-                    'completed': False
-                })
-
-            except googleapiclient.errors.HttpError as error:
-                st.error(f"An error occurred: {error}")
-                all_events_created = False
-                break  # Exit if there's an error in event creation
-
-        if all_events_created:
-            st.success("All review events created successfully!")
-            updated_history = st.session_state['event_history']
-            updated_history['created_events'].append(new_event)
-            st.session_state['event_history'] = updated_history
-
-            # Reset input fields
-            st.session_state.event_date = datetime.date.today()
-            st.session_state.event_time = datetime.time(9, 0)
-            st.session_state.study_duration = 60
-            st.session_state.event_subject = "Physics"
-            st.session_state.event_description = ""
-
-            st.experimental_rerun()  # Rerun the app to refresh the UI
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
