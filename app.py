@@ -64,17 +64,20 @@ def get_credentials():
 
             # After user authorizes, get the code from the URL and fetch the token
             code = st.experimental_get_query_params().get('code')
-            if code:
+            if 'code' in st.experimental_get_query_params():
                 try:
-                    flow.fetch_token(code=code[0])
+                    code = st.experimental_get_query_params()['code'][0]
+                    flow.fetch_token(code=code)
                     creds = flow.credentials
                     st.session_state['token'] = creds.to_json()  # Save the credentials as a JSON string
-                    st.experimental_rerun()  # Rerun the app to reflect the new credentials
+
+                    # Clear the query parameters to avoid reprocessing the code in future runs
+                    st.experimental_set_query_params()  # This will remove the 'code' from the URL
+                    st.success("Authorization successful! You can now proceed.")
+        
                 except Exception as e:
                     st.error(f"Error fetching token: {e}")
-                    st.stop()
-            else:
-                st.stop()
+
 
     return creds
 
